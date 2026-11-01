@@ -42,6 +42,11 @@
   globalThis.isbnReaderClose = close;
   globalThis.navigation?.addEventListener('navigatesuccess', close); // another page (also in-page navigation and Back): the card is no longer about this page
 
+  const allText = () => {
+    const body = document.body.cloneNode(true);
+    body.querySelectorAll('script, style, noscript').forEach((n) => n.remove());
+    return body.textContent;
+  };
   const read = (selector, attr, doc) => [...doc.querySelectorAll(selector)].map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '').filter(Boolean);
   // A single-page shop swaps the content without reloading, so the page's head and data scripts still describe the
   // book it was first loaded with. When the address is no longer the loaded one, the head data is read from a fresh
@@ -61,8 +66,8 @@
       ...read('[itemprop="isbn"]:not(meta)', null, data),
     ],
     title: [document.title, ...read('meta[property="og:title"], meta[property="og:description"]', 'content', data)],
-    // visible text, then the page's JSON data (single-page shops keep the specs tab, with its ISBN, only there)
-    text: [document.body.innerText, ...read('script[type="application/json"]', null, data)].join('\n').slice(0, 400000),
+    // the page's text including hidden tabs (shops keep the specs tab, with its ISBN, hidden), then its JSON data
+    text: [allText(), ...read('script[type="application/json"]', null, data)].join('\n').slice(0, 400000),
   }).catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
   if (!host.isConnected) return; // closed while waiting
 

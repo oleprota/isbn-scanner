@@ -51,3 +51,8 @@ test('real page: Apriori keeps the main book\'s ISBN spec in page data, ahead of
   const nuxt = '[{"isbn":149},"9781524760373",{"name":167,"value":168},"ISBN"," 978-617-8634-66-7 ",{"name":170},"Розмір","150 x 220 мм","isbn","9780593723821","isbnlocal","978-617-8634-37-7"]';
   assert.equal(pick({ text: `Довкола ливарень\n680 грн\n${nuxt}` }), '9786178634667');
 });
+
+test('real page: Vivat has the label and the number in neighbouring elements, glued together in the page text', () => {
+  assert.equal(pick({ text: `Артикул1768975ISBN${A}Тип товаруПаперова книжка` }), A);
+  assert.equal(pick({ text: `ISBN${A}2024` }), A);
+});
