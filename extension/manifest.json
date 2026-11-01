@@ -7,6 +7,7 @@
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://isbn-lookup.oleprota.workers.dev/*"],
   "optional_host_permissions": ["*://*/*"],
+  "web_accessible_resources": [{ "resources": ["icons/*.png"], "matches": ["http://*/*", "https://*/*"] }],
   "options_ui": { "page": "options.html", "open_in_tab": false },
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "Показати книгу на сторінці" }

@@ -12,32 +12,43 @@
   const style = document.createElement('style');
   style.textContent = `
     :host { all: initial; }
-    .frame { position: fixed; top: 16px; right: 16px; z-index: 2147483647; box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px);
-      padding: 12px; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; background: #fff; color: #1a1a1a; border: 1px solid #ccc; box-shadow: 0 4px 16px #0004; display: flex; gap: 10px; }
-    @media (prefers-color-scheme: dark) { .frame { background: #1e1e1e; color: #eee; border-color: #444; } }
-    img { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
+    .frame { --card: #fffdf8; --fg: #2a2823; --muted: #5e5a50; --link: #2f6f6b; --accent: #2f6f6b; --line: #e4dcc9; --error: #b32942; --star: #b7791f;
+      position: fixed; top: 16px; right: 16px; z-index: 2147483647; box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px);
+      padding: 12px; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; background: var(--card); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 4px 16px #0004; display: flex; gap: 10px; }
+    @media (prefers-color-scheme: dark) { .frame { --card: #272726; --fg: #e8e8e6; --muted: #a8a8a4; --link: #3acb89; --accent: #3acb89; --line: #3a3a38; --error: #ff8a80; --star: #f2b84b; } }
+    img.cover { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
     .body { min-width: 0; flex: 1; } .title { font-weight: 600; } .meta { opacity: .8; }
-    .links { display: flex; gap: 12px; margin-top: 6px; } a { color: #1a56c8; }
-    @media (prefers-color-scheme: dark) { a { color: #8ab4f8; } }
-    .site { position: static; margin-top: 6px; padding: 0; font-size: 12px; color: #1a56c8; text-decoration: underline; }
-    button { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
+    .links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 20px; }
+    a, .site { display: inline-flex; align-items: center; gap: 4px; color: var(--link); font: inherit; }
+    a img { width: 16px; height: 16px; border-radius: 3px; }
+    .site { margin-top: 6px; padding: 0; border: 0; background: none; text-decoration: underline; cursor: pointer; }
+    button.close { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
+    .rating { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--accent); }
+    .rating svg { flex: none; width: 18px; height: 18px; fill: var(--star); }
+    .rating strong { font-size: 26px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+    .rating .count { align-self: flex-end; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
     .none { padding: 8px 12px; }
     .wait { align-items: center; padding: 8px 12px; }
-    .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: #1a56c8; border-radius: 50%; animation: turn .8s linear infinite; }
+    .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: var(--accent); border-radius: 50%; animation: turn .8s linear infinite; }
     @keyframes turn { to { transform: rotate(360deg); } }`;
   const frame = box('div', null, 'frame');
   frame.role = 'dialog';
   const spinner = box('span', null, 'spinner');
   spinner.role = 'status';
-  spinner.setAttribute('aria-label', t.loading);
+  spinner.setAttribute('aria-label', t.finding);
   frame.classList.add('wait');
-  frame.append(spinner, box('span', t.loading));
+  const label = box('span', t.finding);
+  frame.append(spinner, label);
+  // background.js says when the ISBN is found and the Goodreads lookup starts
+  const onSearching = (message) => { if (message?.searching) { if (t.auto && !closed) document.documentElement.append(host); /* auto-mode shows itself only now, once the ISBN is found */ label.textContent = t.loading; spinner.setAttribute('aria-label', t.loading); } };
+  chrome.runtime.onMessage.addListener(onSearching);
   root.append(style, frame);
   if (!t.auto) document.documentElement.append(host); // auto-mode stays invisible until it has something to say
 
   let closed = false;
   const close = () => {
     closed = true;
+    chrome.runtime.onMessage.removeListener(onSearching);
     host.remove();
     removeEventListener('keydown', onKey, true);
     globalThis.navigation?.removeEventListener('navigatesuccess', close);
@@ -92,19 +103,31 @@
     const img = document.createElement('img');
     img.src = card.image; // already limited to https:// by cleanAnswer
     img.alt = '';
+    img.className = 'cover';
     frame.append(img);
   }
   const body = box('div', null, 'body');
   body.append(box('div', card.title, 'title'));
   if (card.author) body.append(box('div', card.author.name, 'meta'));
-  if (card.rating) {
-    const rating = box('div', card.rating.text, 'meta');
+  if (card.rating) { // like the app: gold star, big number, small count
+    const rating = box('div', null, 'rating');
     rating.title = card.rating.title;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z');
+    svg.append(path);
+    rating.append(svg, box('strong', card.rating.value), box('span', `(${card.rating.count})`, 'count'));
     body.append(rating);
   }
   const links = box('div', null, 'links');
-  for (const { name, url, title } of card.links) {
-    const link = box('a', name);
+  for (const { name, url, title, icon } of card.links) {
+    const link = box('a');
+    const img = document.createElement('img');
+    img.src = icon; // our own copy of the site's icon (see icons/README.md)
+    img.alt = '';
+    link.append(img, name);
     link.href = url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
@@ -118,7 +141,7 @@
     if (answer) site.textContent = answer.enabled ? t.autoOff : t.autoOn;
   };
   body.append(site);
-  const x = box('button', '×');
+  const x = box('button', '×', 'close');
   x.setAttribute('aria-label', t.close);
   x.onclick = close;
   frame.append(body, x);

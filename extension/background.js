@@ -14,7 +14,7 @@ async function inject(tabId, url, auto) {
   const patterns = sitePatterns(url);
   const enabled = !!patterns && await chrome.permissions.contains({ origins: patterns });
   const target = { tabId };
-  const texts = { loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off };
+  const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -32,10 +32,18 @@ async function registerAutoStart() {
 }
 // one at a time: overlapping runs would register the same id twice
 let syncing = Promise.resolve();
-const syncAutoStart = () => { syncing = syncing.then(registerAutoStart).catch(() => {}); };
+const syncAutoStart = () => { syncing = syncing.then(registerAutoStart).catch((error) => console.error('auto-mode: registering failed', error)); };
 chrome.runtime.onInstalled.addListener(syncAutoStart);
 chrome.runtime.onStartup.addListener(syncAutoStart);
-chrome.permissions.onAdded.addListener(syncAutoStart);
+chrome.permissions.onAdded.addListener(({ origins }) => {
+  syncAutoStart();
+  // Registered scripts only reach pages loaded from now on: start the already open tabs of the new site too.
+  syncing = syncing.then(async () => {
+    const { autoMode } = await chrome.storage.sync.get({ autoMode: true });
+    if (!autoMode || !origins?.length) return;
+    for (const tab of await chrome.tabs.query({ url: origins })) await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autoStart.js'] });
+  }).catch((error) => console.error('auto-mode: starting open tabs failed', error));
+});
 chrome.permissions.onRemoved.addListener(syncAutoStart);
 chrome.storage.onChanged.addListener((changes) => { if (changes.autoMode) syncAutoStart(); });
 
@@ -43,20 +51,21 @@ chrome.storage.onChanged.addListener((changes) => { if (changes.autoMode) syncAu
 chrome.runtime.onMessage.addListener((page, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (page.auto) { // a tab opened before the switch went off or the site was removed may still ask
-    chrome.storage.sync.get({ autoMode: true }).then(({ autoMode }) => autoMode && inject(sender.tab.id, sender.tab.url, true)).catch(() => {});
+    chrome.storage.sync.get({ autoMode: true }).then(({ autoMode }) => autoMode && inject(sender.tab.id, sender.tab.url, true)).catch((error) => console.error('auto-mode: injecting failed', error));
     return;
   }
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
   (async () => {
     const isbn = pickIsbn(page);
     if (!isbn) return respond({ problem: 'noIsbn' });
+    chrome.tabs.sendMessage(sender.tab.id, { searching: true }).catch(() => {}); // ISBN found: now the Goodreads lookup
     let outcome;
     const details = await lookupBook(isbn, { report: (result) => { outcome = result; } });
     if (!details) return respond({ problem: outcome });
-    const links = isbnLinks(isbn).map(({ name, url, title }) => ({ name, url, title }));
+    const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
     const rating = details?.rating ? formatRating(details.rating) : null;
     respond({
-      card: { ...details, links, rating: rating && { text: `★ ${rating.value} (${rating.count})`, title: frame.ratingTitle(rating.value, rating.count) } },
+      card: { ...details, links, rating: rating && { value: rating.value, count: rating.count, title: frame.ratingTitle(rating.value, rating.count) } },
     });
   })();
   return true; // the answer comes later

@@ -17,6 +17,7 @@ if (!origins) {
     let failure = '';
     try { granted = await chrome.permissions.request({ origins }); } catch (error) { failure = ` (${error.message})`; } // Chrome refusing the request, vs the user declining
     text.textContent = granted ? t.done : t.denied + failure;
-    button.hidden = true;
+    button.textContent = t.close; // the same button closes the tab afterwards
+    button.onclick = () => window.close();
   };
 }

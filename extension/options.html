@@ -1,7 +1,10 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Автопошук книги</title>
-<style>body { font: 14px/1.5 system-ui, sans-serif; margin: 16px; max-width: 420px; } li { margin: 6px 0; } button { margin-left: 8px; }</style>
+<style>:root { color-scheme: light dark; --bg: #f4efe4; --fg: #2a2823; --link: #2f6f6b; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1b1b1a; --fg: #e8e8e6; --link: #3acb89; } }
+body { background: var(--bg); color: var(--fg); }
+body { font: 14px/1.5 system-ui, sans-serif; margin: 16px; max-width: 420px; } li { margin: 6px 0; } button { margin-left: 8px; }</style>
 <label><input type="checkbox" id="master"> <span id="masterText"></span></label>
 <h3 id="sitesTitle"></h3>
 <ul id="sites"></ul>
