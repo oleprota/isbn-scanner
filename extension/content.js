@@ -40,7 +40,11 @@
   const label = box('span', t.finding);
   frame.append(spinner, label);
   // background.js says when the ISBN is found and the Goodreads lookup starts
-  const onSearching = (message) => { if (message?.searching) { if (t.auto && !closed) document.documentElement.append(host); /* auto-mode shows itself only now, once the ISBN is found */ label.textContent = t.loading; spinner.setAttribute('aria-label', t.loading); } };
+  let siteButton; // the card's auto-search link, once there is a card
+  const showSite = (enabled) => { if (siteButton) siteButton.textContent = enabled ? t.autoOff : t.autoOn; };
+  const onSearching = (message) => {
+    if (message?.siteChanged) chrome.runtime.sendMessage({ siteState: true }).then((answer) => answer && showSite(answer.enabled)).catch(() => {}); // added or removed by the grant page, the menu or the options
+    if (message?.searching) { if (t.auto && !closed) document.documentElement.append(host); /* auto-mode shows itself only now, once the ISBN is found */ label.textContent = t.loading; spinner.setAttribute('aria-label', t.loading); } };
   chrome.runtime.onMessage.addListener(onSearching);
   root.append(style, frame);
   if (!t.auto) document.documentElement.append(host); // auto-mode stays invisible until it has something to say
@@ -136,9 +140,10 @@
   }
   body.append(links);
   const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
+  siteButton = site;
   site.onclick = async () => {
     const answer = await chrome.runtime.sendMessage({ toggleSite: true }).catch(() => null);
-    if (answer) site.textContent = answer.enabled ? t.autoOff : t.autoOn;
+    if (answer) showSite(answer.enabled);
   };
   body.append(site);
   const x = box('button', '×', 'close');

@@ -18,8 +18,10 @@ export const frame = {
 };
 
 export const auto = {
-  on: 'Авто-шукати',
-  off: 'Не авто-шукати',
+  menu: (on) => (on ? '✅ Автопошук книг' : '🚫 Автопошук книг'), // the icon's menu can't show a checkmark, so the title carries the state
+  menuSite: (on) => (on ? '✅ Автопошук на цьому сайті' : '🚫 Автопошук на цьому сайті'),
+  on: '🚫 Автопошук на цьому сайті',
+  off: '✅ Автопошук на цьому сайті',
 };
 
 export const options = {
@@ -31,7 +33,7 @@ export const options = {
 };
 
 export const grant = {
-  ask: (site) => `Шукати книгу автоматично на ${site}? Натисніть "Дозволити" нижче — і ще раз у віконці, яке відкриє браузер.`,
+  ask: 'Шукати книгу автоматично на',
   allow: 'Дозволити',
   close: 'Закрити',
   done: 'Готово! Тепер я шукатиму будь-яку книгу, яку ви відкриєте на цьому сайті.',

@@ -10,7 +10,16 @@ const button = document.getElementById('allow');
 if (!origins) {
   button.hidden = true;
 } else {
-  text.textContent = t.ask(origins[0].slice(4, -2));
+  const host = origins[0].slice(4, -2);
+  const favicon = new URL(chrome.runtime.getURL('/_favicon/')); // the browser's own copy of the site's icon, nothing is fetched by us
+  favicon.search = new URLSearchParams({ pageUrl: `https://${host}/`, size: '32' });
+  const site = document.createElement('span');
+  site.className = 'site';
+  const icon = document.createElement('img');
+  icon.src = favicon.href;
+  icon.alt = '';
+  site.append(icon, host);
+  text.append(`${t.ask} `, site, '?');
   button.textContent = t.allow;
   button.onclick = async () => {
     let granted = false;

@@ -33,10 +33,43 @@ async function registerAutoStart() {
 // one at a time: overlapping runs would register the same id twice
 let syncing = Promise.resolve();
 const syncAutoStart = () => { syncing = syncing.then(registerAutoStart).catch((error) => console.error('auto-mode: registering failed', error)); };
-chrome.runtime.onInstalled.addListener(syncAutoStart);
+// The master switch is also a checkbox in the toolbar icon's right-click menu (the options page sets the same value).
+chrome.runtime.onInstalled.addListener(async () => {
+  const { autoMode } = await chrome.storage.sync.get({ autoMode: true });
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({ id: 'autoMode', title: autoTexts.menu(autoMode), contexts: ['action'] });
+  chrome.contextMenus.create({ id: 'autoSite', title: autoTexts.menuSite(false), contexts: ['action'] });
+  refreshSiteMenu();
+  syncAutoStart();
+});
+// The second item names the current site's state. The address of a tab on a site not in the list is hidden from us,
+// which reads as "off", so no extra permission is needed.
+// Open cards update their auto-search link when a site was added or removed from anywhere.
+async function tellCards() {
+  for (const tab of await chrome.tabs.query({})) chrome.tabs.sendMessage(tab.id, { siteChanged: true }).catch(() => {}); // most tabs have no card
+}
+
+async function refreshSiteMenu() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const origins = sitePatterns(tab?.url);
+  const on = !!origins && await chrome.permissions.contains({ origins });
+  chrome.contextMenus.update('autoSite', { title: autoTexts.menuSite(on) }).catch(() => {});
+}
+chrome.tabs.onActivated.addListener(refreshSiteMenu);
+chrome.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'complete' || change.url) refreshSiteMenu(); });
+chrome.windows.onFocusChanged.addListener(refreshSiteMenu);
+chrome.runtime.onStartup.addListener(refreshSiteMenu);
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'autoSite') return void toggleSite(tab?.url).catch(() => {}); // same as the card's link
+  if (info.menuItemId !== 'autoMode') return;
+  const { autoMode } = await chrome.storage.sync.get({ autoMode: true });
+  chrome.storage.sync.set({ autoMode: !autoMode });
+});
 chrome.runtime.onStartup.addListener(syncAutoStart);
 chrome.permissions.onAdded.addListener(({ origins }) => {
   syncAutoStart();
+  refreshSiteMenu();
+  tellCards();
   // Registered scripts only reach pages loaded from now on: start the already open tabs of the new site too.
   syncing = syncing.then(async () => {
     const { autoMode } = await chrome.storage.sync.get({ autoMode: true });
@@ -44,8 +77,12 @@ chrome.permissions.onAdded.addListener(({ origins }) => {
     for (const tab of await chrome.tabs.query({ url: origins })) await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autoStart.js'] });
   }).catch((error) => console.error('auto-mode: starting open tabs failed', error));
 });
-chrome.permissions.onRemoved.addListener(syncAutoStart);
-chrome.storage.onChanged.addListener((changes) => { if (changes.autoMode) syncAutoStart(); });
+chrome.permissions.onRemoved.addListener(() => { syncAutoStart(); refreshSiteMenu(); tellCards(); });
+chrome.storage.onChanged.addListener((changes) => {
+  if (!changes.autoMode) return;
+  chrome.contextMenus.update('autoMode', { title: autoTexts.menu(changes.autoMode.newValue !== false) }).catch(() => {});
+  syncAutoStart();
+});
 
 // content.js sends what it read; the answer is { card } or { problem } (a key of frame.problems: what went wrong).
 chrome.runtime.onMessage.addListener((page, sender, respond) => {
@@ -53,6 +90,11 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
   if (page.auto) { // a tab opened before the switch went off or the site was removed may still ask
     chrome.storage.sync.get({ autoMode: true }).then(({ autoMode }) => autoMode && inject(sender.tab.id, sender.tab.url, true)).catch((error) => console.error('auto-mode: injecting failed', error));
     return;
+  }
+  if (page.siteState) { // does the sender's site have auto-search on? (the card's link asks after a change)
+    const origins = sitePatterns(sender.tab.url);
+    (origins ? chrome.permissions.contains({ origins }) : Promise.resolve(false)).then((enabled) => respond({ enabled }));
+    return true;
   }
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
   (async () => {
