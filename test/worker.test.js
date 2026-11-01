@@ -105,19 +105,18 @@ test('the rate limiter stops requests that are not in the cache', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('cache bypass: NOCACHE_TOKEN asks Goodreads every time on every path, leaves the cache alone, and sends no-store', async () => {
-  const env = { NOCACHE_TOKEN: 's3cret' };
+test('cache bypass: ?nocache=1 asks Goodreads every time on every path, leaves the cache alone, and sends no-store', async () => {
   for (const path of [`/lookup?isbn=${ISBN}`, '/book?id=1', '/search?q=abc']) {
     const { request, calls } = setup(path.startsWith('/search') ? () => new Response('[]') : goodreads());
-    const first = await request(`${path}&nocache=s3cret`, undefined, env);
-    await request(`${path}&nocache=s3cret`, undefined, env);
+    const first = await request(`${path}&nocache=1`);
+    await request(`${path}&nocache=1`);
     assert.equal(first.headers.get('cache-control'), 'no-store', path);
     const bypassed = calls.length;
     assert.ok(bypassed >= 2, path);
-    await request(path, undefined, env); // nothing was written, so a normal request still asks Goodreads
+    await request(path); // nothing was written, so a normal request still asks Goodreads
     assert.ok(calls.length > bypassed, path);
     const normal = calls.length;
-    const again = await request(path, undefined, env); // now it is cached
+    const again = await request(path); // now it is cached
     assert.equal(calls.length, normal, path);
     assert.notEqual(again.headers.get('cache-control'), 'no-store', path);
   }
@@ -125,37 +124,27 @@ test('cache bypass: NOCACHE_TOKEN asks Goodreads every time on every path, leave
 
 test('cache bypass: a bypassed request does not read or change cached answers', async () => {
   const { request, calls } = setup(goodreads());
-  const env = { NOCACHE_TOKEN: 's3cret' };
-  await request(`/lookup?isbn=${ISBN}`, undefined, env);
-  await request(`/lookup?isbn=${ISBN}&nocache=s3cret`, undefined, env);
+  await request(`/lookup?isbn=${ISBN}`);
+  await request(`/lookup?isbn=${ISBN}&nocache=1`);
   assert.equal(calls.length, 2);
-  await request(`/lookup?isbn=${ISBN}`, undefined, env);
+  await request(`/lookup?isbn=${ISBN}`);
   assert.equal(calls.length, 2);
 });
 
-test('cache bypass: a wrong token, none, or an empty one with the secret unset is a normal request', async () => {
-  const cases = [['&nocache=wrong', { NOCACHE_TOKEN: 's3cret' }], ['', { NOCACHE_TOKEN: 's3cret' }], ['&nocache=', { NOCACHE_TOKEN: 's3cret' }], ['&nocache=', {}], ['&nocache=', { NOCACHE_TOKEN: '' }], ['&nocache=x', {}]];
-  for (const [query, env] of cases) {
+test('cache bypass: any other nocache value is a normal request', async () => {
+  for (const query of ['', '&nocache=', '&nocache=0', '&nocache=x']) {
     const { request, calls } = setup(goodreads());
-    const first = await request(`/lookup?isbn=${ISBN}${query}`, undefined, env);
-    await request(`/lookup?isbn=${ISBN}${query}`, undefined, env);
+    const first = await request(`/lookup?isbn=${ISBN}${query}`);
+    await request(`/lookup?isbn=${ISBN}${query}`);
     assert.equal(calls.length, 1, query);
     assert.notEqual(first.headers.get('cache-control'), 'no-store', query);
   }
 });
 
-test('cache bypass: NO_CACHE bypasses without a token', async () => {
-  const { request, calls } = setup(goodreads());
-  const response = await request(`/lookup?isbn=${ISBN}`, undefined, { NO_CACHE: '1' });
-  await request(`/lookup?isbn=${ISBN}`, undefined, { NO_CACHE: '1' });
-  assert.equal(calls.length, 2);
-  assert.equal(response.headers.get('cache-control'), 'no-store');
-});
-
 test('cache bypass: the rate limiter still stops a bypassed request', async () => {
   const { request, calls } = setup(goodreads());
-  const env = { NOCACHE_TOKEN: 's3cret', LIMITER: { limit: async () => ({ success: false }) } };
-  assert.equal((await request(`/lookup?isbn=${ISBN}&nocache=s3cret`, undefined, env)).status, 429);
+  const env = { LIMITER: { limit: async () => ({ success: false }) } };
+  assert.equal((await request(`/lookup?isbn=${ISBN}&nocache=1`, undefined, env)).status, 429);
   assert.equal(calls.length, 0);
 });
 

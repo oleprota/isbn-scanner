@@ -103,13 +103,13 @@ test('report tells how a request ended', async () => {
   assert.deepEqual(await outcome(async () => { throw new DOMException('slow', 'TimeoutError'); }), [['timeout', 'number']]);
 });
 
-test('setNoCache adds the token to requests until cleared', async () => {
+test('setNoCache adds nocache=1 to requests until switched off', async () => {
   const urls = [];
   const fetchFn = async (u) => (urls.push(u), { ok: false, status: 404 });
-  setNoCache('s3');
+  setNoCache(true);
   await lookupBook('1', { url: 'https://w', fetchFn });
-  setNoCache('');
+  setNoCache(false);
   await lookupBook('1', { url: 'https://w', fetchFn });
-  assert.match(urls[0], /nocache=s3/);
+  assert.match(urls[0], /nocache=1/);
   assert.doesNotMatch(urls[1], /nocache/);
 });

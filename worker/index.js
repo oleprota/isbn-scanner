@@ -158,8 +158,8 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
         : json({}, 404, certain ? MISSING_SECONDS : UNSURE_SECONDS, { 'x-miss-reason': miss }); // the reason is for curl, when debugging
     }
 
-    // test-only bypass (ADR-0003): NO_CACHE=1 (local .dev.vars), or ?nocache=<secret NOCACHE_TOKEN>, which never matches while the secret is unset or empty
-    const bypass = Boolean(env.NO_CACHE) || (Boolean(env.NOCACHE_TOKEN) && url.searchParams.get('nocache') === env.NOCACHE_TOKEN);
+    // test-only bypass (ADR-0003): ?nocache=1 skips the edge cache, read and write
+    const bypass = url.searchParams.get('nocache') === '1';
     const cacheKey = new Request(`https://lookup.invalid/${key}`);
     const cached = bypass ? null : await cache.match(cacheKey);
     if (cached) return new Response(cached.body, { status: cached.status, headers: { ...Object.fromEntries(cached.headers), ...cors } });

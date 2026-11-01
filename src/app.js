@@ -52,15 +52,10 @@ window.addEventListener('pagehide', stats.flush);
 const statsNote = document.getElementById('stats-note');
 statsNote.textContent = str.page.statsNote(stats.id, stats.dev);
 statsNote.hidden = !stats.enabled;
-// Dev only: unticking the box bypasses the worker's cache (the token is asked each time, kept in memory only).
+// Dev only: unticking the box makes every request skip the worker's cache; a reload ticks it again.
 const devTools = document.getElementById('dev-tools');
-const devCache = document.getElementById('dev-cache');
 devTools.hidden = !(stats.enabled && stats.dev);
-devCache.addEventListener('change', () => {
-  const token = devCache.checked ? '' : prompt(str.page.dev.tokenPrompt);
-  if (token === null) devCache.checked = true; // prompt cancelled
-  setNoCache(token ?? '');
-});
+document.getElementById('dev-cache').addEventListener('change', (event) => setNoCache(!event.target.checked));
 
 // "Scanned" is everything searched or scanned; "Marked" is the subset the user picked.
 const scanned = createBookList(createListStore(browserStorage(), 'isbn-reader.scanned'));

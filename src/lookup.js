@@ -12,9 +12,9 @@ const SHAPE = 6; // the answer's shape, same as `v6` in worker/index.js: it keep
 const BUSY_WAIT_MS = 5000; // the worker answered 429 (too many lookups at once): the request waits and goes again
 const BUSY_RETRIES = 3;
 
-// Dev only (ADR-0003): while set, every request carries it as `nocache` and the worker skips its cache.
-let noCacheToken = '';
-export const setNoCache = (token) => { noCacheToken = token; };
+// Dev only (ADR-0003): while on, every request carries `nocache=1` and the worker skips its cache.
+let noCache = false;
+export const setNoCache = (on) => { noCache = on; };
 
 const AUTHOR_URL = 'https://www.goodreads.com/author/';
 
@@ -72,7 +72,7 @@ async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, tim
   };
   for (let attempt = 0; attempt <= BUSY_RETRIES; attempt++) {
     try {
-      const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCacheToken ? { ...params, nocache: noCacheToken } : params)}`, { signal: AbortSignal.timeout(timeout) });
+      const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCache ? { ...params, nocache: 1 } : params)}`, { signal: AbortSignal.timeout(timeout) });
       if (response.status !== 429) {
         if (!response.ok) return done(response.status === 404 ? 'missing' : 'error');
         const value = parse(await response.json());

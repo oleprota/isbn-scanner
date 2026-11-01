@@ -26,7 +26,6 @@ export const page = {
   dev: {
     summary: 'Для розробника',
     cache: 'Кешувати результати пошуку (за замовчуванням: увімк.)',
-    tokenPrompt: 'NOCACHE_TOKEN воркера (порожньо на localhost):',
   },
 };
 
