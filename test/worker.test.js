@@ -68,22 +68,28 @@ test('an empty 202, an error status, a page without the block or a failure is 40
   }
 });
 
-test('a 202 is asked once more, and the full page that follows is the answer', async () => {
-  const answers = [goodreads('', 202), goodreads()];
+test('a 202 is asked again, and the full page that follows is the answer', async () => {
+  const answers = [goodreads('', 202), goodreads('', 202), goodreads()];
   const { get, calls } = setup(() => answers.shift()());
   const response = await get(`?isbn=${ISBN}`);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).title, 'Title');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
 });
 
-test('only a real 404 is remembered for a day; doubtful misses are asked again after 5 minutes', async () => {
+test('a 202 that never ends is given up after RETRY_202_TRIES tries', async () => {
+  const { get, calls } = setup(goodreads('', 202));
+  assert.equal((await get(`?isbn=${ISBN}`)).status, 404);
+  assert.equal(calls.length, 4);
+});
+
+test('only a real 404 is remembered for a day; doubtful misses are asked again after a minute', async () => {
   const day = await setup(goodreads('', 404)).get(`?isbn=${ISBN}`);
   assert.equal(day.status, 404);
   assert.equal(day.headers.get('cache-control'), 'public, max-age=86400');
   for (const respond of [goodreads('', 202), goodreads('x', 500), goodreads('<html></html>')]) {
     const unsure = await setup(respond).get(`?isbn=${ISBN}`);
-    assert.equal(unsure.headers.get('cache-control'), 'public, max-age=300');
+    assert.equal(unsure.headers.get('cache-control'), 'public, max-age=60');
   }
 });
 
@@ -126,7 +132,7 @@ test('/search rejects a missing or one-letter query, and says 502 when Goodreads
   assert.equal(calls.length, 0);
   const empty = await request('/search?q=nothing');
   assert.deepEqual(await empty.json(), { results: [] });
-  assert.equal(empty.headers.get('cache-control'), 'public, max-age=300');
+  assert.equal(empty.headers.get('cache-control'), 'public, max-age=60');
   for (const respond of [() => new Response('x', { status: 500 }), () => new Response('not json'), () => { throw new Error('offline'); }]) {
     const failed = await setup(respond).request('/search?q=anything');
     assert.equal(failed.status, 502);

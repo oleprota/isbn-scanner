@@ -12,8 +12,9 @@ export const ALLOWED_ORIGINS = ['https://oleprota.github.io', 'http://localhost:
 const FOUND_SECONDS = 7 * 24 * 3600;
 const MISSING_SECONDS = 24 * 3600; // Goodreads said 404: it really doesn't know the book
 const SEARCH_SECONDS = 24 * 3600; // a title search with results
-const UNSURE_SECONDS = 5 * 60; // anything else (an empty 202, a block, an error): ask again soon
-const SEARCH_TRIES = 4;
+const UNSURE_SECONDS = 60; // anything else (an empty 202, a block, an error): ask again soon
+const QUERY_WORD_DROP_TRIES = 4;
+const RETRY_202_TRIES = 4;
 const RETRY_DELAY_MS = 1500;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 400_000; // the JSON-LD block is near the top of a ~1 MB page
@@ -38,11 +39,11 @@ async function readHead(response) {
 }
 
 // Goodreads sometimes answers an empty 202 for a page it has not built yet and serves the full page
-// a moment later, so a 202 is asked once more. Returns { found } (what `parse` made of the page) or
+// a moment later, so a 202 is asked again, up to RETRY_202_TRIES times in all, RETRY_DELAY_MS apart. Returns { found } (what `parse` made of the page) or
 // { miss, certain }: `certain` only when Goodreads answered 404, so that a hiccup is never remembered as "no such book".
 async function fromGoodreads(pageUrl, parse, fetchFn, wait) {
   let miss = 'no answer';
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < RETRY_202_TRIES; attempt++) {
     try {
       const response = await fetchFn(pageUrl, {
         headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
@@ -57,6 +58,7 @@ async function fromGoodreads(pageUrl, parse, fetchFn, wait) {
         miss = 'no book data in page';
       }
       if (response.status !== 202) break;
+      if (attempt === RETRY_202_TRIES - 1) break; // no pause after the last try
     } catch {
       miss = 'timeout or network error';
       break;
@@ -82,10 +84,10 @@ async function suggestions(query, fetchFn) {
 // Goodreads matches every word against the book's title and the names of all authors it lists, and one
 // word that matches nothing (an author spelled in a way Goodreads doesn't have) leaves no results at all.
 // So when the whole query finds nothing, the last word is dropped and it is asked again (the title comes
-// first, the author after it), down to one word, at most SEARCH_TRIES times. Returns the candidates, [] or null (failure).
+// first, the author after it), down to one word, at most QUERY_WORD_DROP_TRIES times. Returns the candidates, [] or null (failure).
 async function searchGoodreads(query, fetchFn) {
   const words = query.split(' ');
-  for (let tries = 0; tries < SEARCH_TRIES && words.length > 0; tries++, words.pop()) {
+  for (let tries = 0; tries < QUERY_WORD_DROP_TRIES && words.length > 0; tries++, words.pop()) {
     const results = await suggestions(words.join(' '), fetchFn);
     if (!results || results.length) return results;
   }
