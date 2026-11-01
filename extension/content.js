@@ -24,10 +24,11 @@
     :host { all: initial; }
     .frame { position: fixed; top: 16px; right: 16px; z-index: 2147483647; box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px);
       padding: 12px; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; background: #fff; color: #1a1a1a; border: 1px solid #ccc; box-shadow: 0 4px 16px #0004; display: flex; gap: 10px; }
-    @media (prefers-color-scheme: dark) { .frame { background: #1e1e1e; color: #eee; border-color: #444; } a { color: #8ab4f8; } }
+    @media (prefers-color-scheme: dark) { .frame { background: #1e1e1e; color: #eee; border-color: #444; }}
     img { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
     .body { min-width: 0; flex: 1; } .title { font-weight: 600; } .meta { opacity: .8; }
     .links { display: flex; gap: 12px; margin-top: 6px; } a { color: #1a56c8; }
+    @media (prefers-color-scheme: dark) { a { color: #8ab4f8; } }
     button { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
     .none { padding: 8px 12px; }`;
   const box = (tag, text, className) => Object.assign(document.createElement(tag), { textContent: text ?? '', className: className ?? '' });
