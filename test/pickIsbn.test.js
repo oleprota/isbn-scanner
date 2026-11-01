@@ -56,3 +56,13 @@ test('real page: Vivat has the label and the number in neighbouring elements, gl
   assert.equal(pick({ text: `Артикул1768975ISBN${A}Тип товаруПаперова книжка` }), A);
   assert.equal(pick({ text: `ISBN${A}2024` }), A);
 });
+
+test('an ISBN found in several sources beats a related book that comes first', () => {
+  // the related book B is labelled before the main book A, which is also in the title and the data
+  assert.equal(pick({ title: [`Book ${A}`], text: `ISBN: ${B} ... ISBN: ${A}` }), A);
+  assert.equal(pick({ jsonLd: [JSON.stringify({ isbn: B })], title: [`Book ${A}`], text: `ISBN ${A}` }), A);
+});
+
+test('a repeat within one source is not a second vote', () => {
+  assert.equal(pick({ text: `ISBN: ${B} ISBN: ${A} ISBN: ${A}` }), B);
+});

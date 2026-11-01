@@ -1,7 +1,6 @@
 // Which ISBN a web page is about, from what the content script read off it:
 // { jsonLd: [JSON strings], meta: [values], title: [<title> and og: values], text: body text }.
-// Order: structured data, then the title, then text labelled "ISBN". The first valid ISBN wins, so the
-// page's own book beats the related books that book pages list further down.
+// Candidates come from structured data, the title and text labelled "ISBN"; see the vote in pickIsbn.
 import { isValidIsbn, normalizeIsbn } from './shared/isbn.js';
 
 const RUN = /\d(?:[ -]?\d){8,}(?:[ -]?X)?/gi; // digits with spaces or hyphens between them
@@ -15,15 +14,8 @@ const valid = (text) => {
   // any other length: the run swallowed digits that follow the ISBN (a year, a price), so try its 13- and 10-digit starts
   return [digits.slice(0, 13), digits.slice(0, 10)].find(isValidIsbn) ?? null;
 };
-const firstIn = (texts, pattern, group = 0) => {
-  for (const text of texts) {
-    for (const match of text.matchAll(pattern)) {
-      const isbn = valid(match[group]);
-      if (isbn) return isbn;
-    }
-  }
-  return null;
-};
+const allIn = (texts, pattern, group = 0) =>
+  texts.flatMap((text) => [...text.matchAll(pattern)].map((match) => valid(match[group]))).filter(Boolean);
 
 function* isbnValues(node) {
   if (Array.isArray(node)) for (const item of node) yield* isbnValues(item);
@@ -35,13 +27,23 @@ function* isbnValues(node) {
   }
 }
 
+const fromJsonLd = (blocks) =>
+  blocks.flatMap((block) => {
+    try { return [...isbnValues(JSON.parse(block))].filter(isValidIsbn).map(normalizeIsbn); } catch { return []; }
+  });
+
 export function pickIsbn({ jsonLd, meta, title, text }) {
-  for (const block of jsonLd) {
-    let data;
-    try { data = JSON.parse(block); } catch { continue; }
-    for (const value of isbnValues(data)) if (isValidIsbn(value)) return normalizeIsbn(value);
-  }
-  return meta.map((value) => (isValidIsbn(value) ? normalizeIsbn(value) : null)).find(Boolean)
-    ?? firstIn(title, RUN)
-    ?? firstIn([text], LABELLED, 1);
+  const sources = [
+    fromJsonLd(jsonLd),
+    meta.filter(isValidIsbn).map(normalizeIsbn),
+    allIn(title, RUN),
+    allIn([text], LABELLED, 1),
+  ];
+  // The page's own book shows up in several sources (data, title, specs); a related book usually in one. So the ISBN
+  // found in the most sources wins, and on a tie the first one in this order (structured data, title, labelled text).
+  const votes = new Map();
+  for (const source of sources) for (const isbn of new Set(source)) votes.set(isbn, (votes.get(isbn) ?? 0) + 1);
+  let best = null;
+  for (const [isbn, count] of votes) if (count > (votes.get(best) ?? 0)) best = isbn;
+  return best;
 }
