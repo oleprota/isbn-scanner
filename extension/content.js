@@ -21,6 +21,7 @@
     @media (prefers-color-scheme: dark) { a { color: #8ab4f8; } }
     button { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
     .none { padding: 8px 12px; }
+    .wait { align-items: center; padding: 8px 12px; }
     .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: #1a56c8; border-radius: 50%; animation: turn .8s linear infinite; }
     @keyframes turn { to { transform: rotate(360deg); } }`;
   const frame = box('div', null, 'frame');
@@ -28,7 +29,8 @@
   const spinner = box('span', null, 'spinner');
   spinner.role = 'status';
   spinner.setAttribute('aria-label', t.loading);
-  frame.append(spinner);
+  frame.classList.add('wait');
+  frame.append(spinner, box('span', t.loading));
   root.append(style, frame);
   document.documentElement.append(host);
 
@@ -72,6 +74,7 @@
   if (!host.isConnected) return; // closed while waiting
 
   frame.replaceChildren();
+  frame.classList.remove('wait');
   if (!card) {
     frame.classList.add('none');
     frame.append(box('span', t.problems[problem] ?? t.problems.error));
