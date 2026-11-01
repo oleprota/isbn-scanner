@@ -10,7 +10,7 @@ import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
 import { factsBlock, ratingBlock } from './details.js';
-import { LOOKUP_URL, editionOfBook, lookupBook, searchBooks } from './lookup.js';
+import { LOOKUP_URL, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
 import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
@@ -52,6 +52,15 @@ window.addEventListener('pagehide', stats.flush);
 const statsNote = document.getElementById('stats-note');
 statsNote.textContent = str.page.statsNote(stats.id, stats.dev);
 statsNote.hidden = !stats.enabled;
+// Dev only: unticking the box bypasses the worker's cache (the token is asked each time, kept in memory only).
+const devTools = document.getElementById('dev-tools');
+const devCache = document.getElementById('dev-cache');
+devTools.hidden = !(stats.enabled && stats.dev);
+devCache.addEventListener('change', () => {
+  const token = devCache.checked ? '' : prompt(str.page.dev.tokenPrompt);
+  if (token === null) devCache.checked = true; // prompt cancelled
+  setNoCache(token ?? '');
+});
 
 // "Scanned" is everything searched or scanned; "Marked" is the subset the user picked.
 const scanned = createBookList(createListStore(browserStorage(), 'isbn-reader.scanned'));
