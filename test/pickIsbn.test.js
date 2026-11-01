@@ -38,3 +38,16 @@ test('the first valid candidate of the first source wins', () => {
   assert.equal(pick({ title: [`x ${isbns.invalid[1].isbn} y ${B}`] }), B);
   assert.equal(pick({ text: `ISBN: ${A} … ISBN: ${B}` }), A);
 });
+
+// Snippets as seen on the shops on 2026-11-01
+test('real pages: Bohdan and MBooks (ISBN in the title), Nebo (labelled text), ReadEat (JSON-LD)', () => {
+  assert.equal(pick({ title: ['Купити книгу Війна старого : роман онлайн, Скалці Д. , 978-966-10-8980-7 | Видавництво «Богдан»'] }), '9789661089807');
+  assert.equal(pick({ title: ['Книга Рій - Франк Шетцінг, (2026) купити на MEGOGO BOOKS | ISBN 978-966-10-9300-2'] }), '9789661093002');
+  assert.equal(pick({ text: 'Видавництво\nISBN\tISBN 978-617-8446-15-4\nСторінок' }), '9786178446154');
+  assert.equal(pick({ jsonLd: ['{"@type":"Book","isbn":"9786175480892"}'] }), '9786175480892');
+});
+
+test('real page: Apriori keeps the main book\'s ISBN spec in page data, ahead of related books', () => {
+  const nuxt = '[{"isbn":149},"9781524760373",{"name":167,"value":168},"ISBN"," 978-617-8634-66-7 ",{"name":170},"Розмір","150 x 220 мм","isbn","9780593723821","isbnlocal","978-617-8634-37-7"]';
+  assert.equal(pick({ text: `Довкола ливарень\n680 грн\n${nuxt}` }), '9786178634667');
+});

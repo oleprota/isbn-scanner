@@ -5,7 +5,9 @@
 import { isValidIsbn, normalizeIsbn } from './shared/isbn.js';
 
 const RUN = /\d(?:[ -]?\d){8,}(?:[ -]?X)?/gi; // digits with spaces or hyphens between them
-const LABELLED = new RegExp(`ISBN(?:-1[03])?\\s*[:#]?\\s*(${RUN.source})`, 'gi');
+// Case-sensitive on purpose: in page data (JSON) a book's spec is "ISBN" while related books carry lowercase `isbn` keys.
+// The separator also allows quotes and commas, for `"ISBN"," 978-…"` in JSON.
+const LABELLED = new RegExp(`ISBN(?:-1[03])?[\\s:#"',]*(${RUN.source})`, 'g');
 
 const valid = (text) => {
   const digits = normalizeIsbn(text);

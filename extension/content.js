@@ -11,7 +11,8 @@
       ...texts('[itemprop="isbn"]:not(meta)'),
     ],
     title: [document.title, ...texts('meta[property="og:title"], meta[property="og:description"]', 'content')],
-    text: document.body.innerText.slice(0, 300000),
+    // visible text, then the page's JSON data (single-page shops keep the specs tab, with its ISBN, only there)
+    text: [document.body.innerText, ...texts('script[type="application/json"]')].join('\n').slice(0, 400000),
   }).catch(() => null);
   if (!reply) return;
 
