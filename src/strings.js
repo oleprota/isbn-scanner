@@ -23,6 +23,10 @@ export const page = {
   title: 'Сканер ISBN',
   heading: 'Сканер ISBN',
   statsNote: (id, dev) => `Анонімна статистика (не про вас чи книжки) · ваш ID: ${id}${dev ? ' · dev' : ''}`,
+  dev: {
+    summary: 'Для розробника',
+    cache: 'Кешувати результати пошуку (за замовчуванням: увімк.)',
+  },
 };
 
 export const theme = {

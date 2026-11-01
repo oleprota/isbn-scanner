@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanAnswer, editionOfBook, lookupBook, searchBooks } from '../src/lookup.js';
+import { cleanAnswer, editionOfBook, lookupBook, searchBooks, setNoCache } from '../src/lookup.js';
 
 const URL_ = 'https://lookup.example';
 const answer = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
@@ -101,4 +101,15 @@ test('report tells how a request ended', async () => {
   assert.deepEqual(await outcome(async () => new Response('{}', { status: 429 })), [['busy', 'number']]);
   assert.deepEqual(await outcome(async () => { throw new TypeError('Failed to fetch'); }), [['offline', 'number']]);
   assert.deepEqual(await outcome(async () => { throw new DOMException('slow', 'TimeoutError'); }), [['timeout', 'number']]);
+});
+
+test('setNoCache adds nocache=1 to requests until switched off', async () => {
+  const urls = [];
+  const fetchFn = async (u) => (urls.push(u), { ok: false, status: 404 });
+  setNoCache(true);
+  await lookupBook('1', { url: 'https://w', fetchFn });
+  setNoCache(false);
+  await lookupBook('1', { url: 'https://w', fetchFn });
+  assert.match(urls[0], /nocache=1/);
+  assert.doesNotMatch(urls[1], /nocache/);
 });
