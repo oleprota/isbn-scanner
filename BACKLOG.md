@@ -14,6 +14,9 @@ Ideas that are not part of the current work. Move an item into the plan when it 
 
 - **Split `src/app.js` (636 lines) by area, so the commit gate can map files to verify skills.** Today an `app.js` edit raises `verify-card` and `verify-lists` because the file holds all the areas: the card (`titleHeading`, `renderBook`, `applyMeta`), the lists wiring (`renderLists`, `listView`, `warnFull`), the scanner UI (`openScanner`, `confirmScan`, `flashSnap`) and search (`search`, `candidateList`). Once each area is its own module, `.claude/hooks/verify-gate.sh` needs only new file-to-skill lines, no second map. Chosen over diff regions (git hunk headers name only the nearest function, top-level lines get the previous function's name, shared helpers fire everything) and over `// region` markers (a second thing to keep up to date). Risk: the areas share `shown`, `setStatus`, `search` and `scanned`, so each module must take them as arguments (as `createListView` does). Do it as its own task and run every `verify-*` after.
 
+- **Search field: select all on click.** When the field is not empty, a click on it selects its whole content, so a new request can be typed straight over it.
+- **Search field: keep what the user searched for.** After a title search the field keeps the typed text, not the ISBN of the book that was found (today it is replaced by the ISBN).
+
 ## Later
 - **Scanner, what is left after the 2026-10-27 bench.** Done: 1080p and continuous focus asked for, a frame every 250 ms, a fresh `<video>` for every start, and the reader stays zxing-js (a native `BarcodeDetector` and zxing-wasm were no better on an iPhone and an Android phone; the numbers are in the git history, `d37a832`). Not tried: a torch toggle for dim shops (Chrome on Android only; iOS gives pages no torch), decoding EAN-13 only (the reader tries every 1D format), cropping the frame before decoding.
 - **Installable PWA / offline shell** (service worker) for phone use.
