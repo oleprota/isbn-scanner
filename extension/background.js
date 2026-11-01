@@ -62,10 +62,12 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
   return true; // the answer comes later
 });
 
-// The card's link: opt this site in (Chrome asks the user) or out. The answer is whether it is on now.
+// The card's link: opt the site out right away, or open grant.html to opt it in (Chrome allows the permission prompt
+// only after a click on an extension page). The answer is whether the site is on now.
 async function toggleSite(url) {
   const origins = sitePatterns(url);
   if (!origins) return { enabled: false };
   if (await chrome.permissions.contains({ origins })) return { enabled: !(await chrome.permissions.remove({ origins })) };
-  return { enabled: await chrome.permissions.request({ origins }).catch(() => false) };
+  await chrome.tabs.create({ url: chrome.runtime.getURL(`grant.html?url=${encodeURIComponent(url)}`) });
+  return { enabled: false };
 }
