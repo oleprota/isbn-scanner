@@ -49,7 +49,11 @@ test('accepts a hyphenated ISBN and rejects invalid ones without asking Goodread
 test('refuses other origins, answers the preflight, only serves GET', async () => {
   const { get, calls } = setup(goodreads());
   assert.equal((await get(`?isbn=${ISBN}`, { origin: 'https://evil.example' })).status, 403);
+  assert.equal((await get(`?isbn=${ISBN}`, { origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' })).status, 403);
   assert.equal(calls.length, 0);
+  const extension = await get(`?isbn=${ISBN}`, { origin: 'chrome-extension://pklepflaloonoobdekhhkhllcclcgipm' });
+  assert.equal(extension.status, 200);
+  assert.equal(extension.headers.get('access-control-allow-origin'), 'chrome-extension://pklepflaloonoobdekhhkhllcclcgipm');
   const handle = createHandler({ fetchFn: goodreads(), cache: memoryCache() });
   const preflight = await handle(new Request('https://worker.test/lookup', { method: 'OPTIONS', headers: { origin: 'http://localhost:8000' } }));
   assert.equal(preflight.status, 204);

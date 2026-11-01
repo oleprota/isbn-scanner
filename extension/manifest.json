@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Сканер ISBN: книга на сторінці",
+  "version": "1.0.0",
+  "description": "Рейтинг Goodreads і посилання на Ereadian для книги на поточній сторінці.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1DmB7gjDG+JwoneQHEZ78Xt/x64NrSAyEETl4P3mdUvyRgUZqyxeSVNfBpyEwAgCcu6X3FPT/8b1kLqXd8g8oBYIYm6PiXUXvuiylpZiqMu4Pdq4lfVYLs0j1nN2t10pyVk40J6wN9dxl+6Xptb8vRZIVG7NyQH9joGBKYD8uQmkRLxvECM9Y41LGzcmT7WIHDUMMyFkx+GUIaL26ocyMPnxCGt9zKabV1vfpVaiv+L1mmzNpzA7KymthqZxpk7MS1W4rHjCjVP9sZwnb+kQytHoks77jAgONnZ8HmZPyVm1tcrRMCKy5Nz9Efn1HoCAwmZsSAZM0wsm6vRS3yxZQIDAQAB",
+  "permissions": ["activeTab", "scripting", "storage", "contextMenus", "favicon"],
+  "host_permissions": ["https://isbn-lookup.oleprota.workers.dev/*"],
+  "optional_host_permissions": ["*://*/*"],
+  "web_accessible_resources": [{ "resources": ["icons/*.png"], "matches": ["http://*/*", "https://*/*"] }],
+  "options_ui": { "page": "options.html", "open_in_tab": false },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Показати книгу на сторінці" }
+}

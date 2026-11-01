@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Автопошук книги</title>
+<style>:root { color-scheme: light dark; --bg: #f4efe4; --fg: #2a2823; --link: #2f6f6b; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1b1b1a; --fg: #e8e8e6; --link: #3acb89; } }
+body { background: var(--bg); color: var(--fg); }
+body { font: 16px/1.5 system-ui, sans-serif; margin: 32px auto; max-width: 420px; padding: 0 16px; } button { font-size: 16px; padding: 6px 16px; }
+.site { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 6px; background: color-mix(in srgb, var(--fg) 10%, transparent); font-weight: 600; }
+.site img { width: 16px; height: 16px; }</style>
+<p id="text"></p>
+<button id="allow"></button>
+<script type="module" src="grant.js"></script>

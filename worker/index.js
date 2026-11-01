@@ -8,7 +8,8 @@ import { isValidIsbn, normalizeIsbn } from '../src/isbn.js';
 import { parseBook, parseCandidates, parseEdition } from './goodreads.js';
 import { MAX_BYTES as MAX_EVENT_BYTES, cleanBatch, pruneEvents, saveBatch } from './events.js';
 
-export const ALLOWED_ORIGINS = ['https://oleprota.github.io', 'http://localhost:8000'];
+// the last one is the browser extension (extension/), whose ID the manifest's `key` pins
+export const ALLOWED_ORIGINS = ['https://oleprota.github.io', 'http://localhost:8000', 'chrome-extension://pklepflaloonoobdekhhkhllcclcgipm'];
 const FOUND_SECONDS = 7 * 24 * 3600;
 const MISSING_SECONDS = 24 * 3600; // Goodreads said 404: it really doesn't know the book
 const SEARCH_SECONDS = 24 * 3600; // a title search with results
