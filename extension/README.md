@@ -15,4 +15,5 @@ Chromium (Manifest V3). Click the toolbar icon on a book page: it finds the page
 4. Close button and Escape both remove the card.
 5. Site CSS does not change the frame (try a page with aggressive global styles); the frame does not change the page.
 6. Dark colour scheme → dark frame, readable links.
-7. Click twice → one frame. Offline → the matching problem line, no errors.
+7. Single-page shop: Apriori krapla-skverni → click a link to misto-shodiv → the old card closes; click the icon → card for the new book (ISBN from a fresh copy of the page).
+8. Click twice → one frame. Offline → the matching problem line, no errors.

@@ -42,20 +42,27 @@
   globalThis.isbnReaderClose = close;
   globalThis.navigation?.addEventListener('navigatesuccess', close); // another page (also in-page navigation and Back): the card is no longer about this page
 
-  const texts = (selector, attr) => [...document.querySelectorAll(selector)].map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '').filter(Boolean);
+  const read = (selector, attr, doc) => [...doc.querySelectorAll(selector)].map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '').filter(Boolean);
   // A single-page shop swaps the content without reloading, so the page's head and data scripts still describe the
-  // book it was first loaded with: when the address is no longer the loaded one, only the visible page is read.
+  // book it was first loaded with. When the address is no longer the loaded one, the head data is read from a fresh
+  // copy of this same page (one request to the site the user is on); if that fails, from the visible page only.
   const loaded = performance.getEntriesByType('navigation')[0]?.name ?? location.href;
-  const stale = loaded.split('#')[0] !== location.href.split('#')[0];
+  let data = document;
+  if (loaded.split('#')[0] !== location.href.split('#')[0]) {
+    data = await fetch(location.href, { credentials: 'same-origin' })
+      .then((response) => response.text())
+      .then((html) => new DOMParser().parseFromString(html, 'text/html'))
+      .catch(() => new DOMParser().parseFromString('', 'text/html'));
+  }
   const { card, problem } = (await chrome.runtime.sendMessage({
-    jsonLd: stale ? [] : texts('script[type="application/ld+json"]'),
-    meta: stale ? [] : [
-      ...texts('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content'),
-      ...texts('[itemprop="isbn"]:not(meta)'),
+    jsonLd: read('script[type="application/ld+json"]', null, data),
+    meta: [
+      ...read('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content', data),
+      ...read('[itemprop="isbn"]:not(meta)', null, data),
     ],
-    title: [document.title, ...(stale ? [] : texts('meta[property="og:title"], meta[property="og:description"]', 'content'))],
+    title: [document.title, ...read('meta[property="og:title"], meta[property="og:description"]', 'content', data)],
     // visible text, then the page's JSON data (single-page shops keep the specs tab, with its ISBN, only there)
-    text: [document.body.innerText, ...(stale ? [] : texts('script[type="application/json"]'))].join('\n').slice(0, 400000),
+    text: [document.body.innerText, ...read('script[type="application/json"]', null, data)].join('\n').slice(0, 400000),
   }).catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
   if (!host.isConnected) return; // closed while waiting
 
