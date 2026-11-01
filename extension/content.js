@@ -38,7 +38,7 @@
   globalThis.isbnReaderClose = close;
 
   const texts = (selector, attr) => [...document.querySelectorAll(selector)].map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '').filter(Boolean);
-  const { card } = (await chrome.runtime.sendMessage({
+  const { card, problem } = (await chrome.runtime.sendMessage({
     jsonLd: texts('script[type="application/ld+json"]'),
     meta: [
       ...texts('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content'),
@@ -47,14 +47,14 @@
     title: [document.title, ...texts('meta[property="og:title"], meta[property="og:description"]', 'content')],
     // visible text, then the page's JSON data (single-page shops keep the specs tab, with its ISBN, only there)
     text: [document.body.innerText, ...texts('script[type="application/json"]')].join('\n').slice(0, 400000),
-  }).catch(() => null)) ?? {};
+  }).catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
   if (!host.isConnected) return; // closed while waiting
 
   frame.replaceChildren();
   if (!card) {
     frame.classList.add('none');
-    frame.append(box('span', t.notFound));
-    setTimeout(close, 4000);
+    frame.append(box('span', t.problems[problem] ?? t.problems.error));
+    setTimeout(close, 6000);
     return;
   }
   if (card.image) {

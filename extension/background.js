@@ -8,21 +8,24 @@ import { frame } from './texts.js';
 
 chrome.action.onClicked.addListener((tab) => {
   const target = { tabId: tab.id };
-  chrome.scripting.executeScript({ target, func: (texts) => { globalThis.isbnReaderTexts = texts; }, args: [{ loading: frame.loading, notFound: frame.notFound, close: frame.close }] })
+  chrome.scripting.executeScript({ target, func: (texts) => { globalThis.isbnReaderTexts = texts; }, args: [{ loading: frame.loading, close: frame.close, problems: frame.problems }] })
     .then(() => chrome.scripting.executeScript({ target, files: ['content.js'] }))
     .catch(() => {}); // chrome:// pages and the like
 });
 
-// content.js sends what it read; the answer is { card } (null = nothing found).
+// content.js sends what it read; the answer is { card } or { problem } (a key of frame.problems: what went wrong).
 chrome.runtime.onMessage.addListener((page, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   (async () => {
     const isbn = pickIsbn(page);
-    const details = isbn && (await lookupBook(isbn));
-    const links = details ? isbnLinks(isbn).map(({ name, url, title }) => ({ name, url, title })) : [];
+    if (!isbn) return respond({ problem: 'noIsbn' });
+    let outcome;
+    const details = await lookupBook(isbn, { report: (result) => { outcome = result; } });
+    if (!details) return respond({ problem: outcome });
+    const links = isbnLinks(isbn).map(({ name, url, title }) => ({ name, url, title }));
     const rating = details?.rating ? formatRating(details.rating) : null;
     respond({
-      card: details && { ...details, links, rating: rating && { text: `★ ${rating.value} (${rating.count})`, title: frame.ratingTitle(rating.value, rating.count) } },
+      card: { ...details, links, rating: rating && { text: `★ ${rating.value} (${rating.count})`, title: frame.ratingTitle(rating.value, rating.count) } },
     });
   })();
   return true; // the answer comes later
