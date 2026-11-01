@@ -39,6 +39,13 @@ Read it (every row has `dev`: 1 is the developer's own use, leave it out):
 
 To change the service, edit `worker/` and run `npx wrangler deploy` again. To turn the lookup off, set `LOOKUP_URL` back to `''`.
 
+## Testing without the cache
+
+To see what Goodreads really answers now (the bypass neither reads nor writes the edge cache, answers `cache-control: no-store`, and the rate limiter still applies):
+- Locally: put `NO_CACHE=1` in `worker/.dev.vars` (git-ignored) and run `npx wrangler dev`.
+- Deployed: `npx wrangler secret put NOCACHE_TOKEN`, then call `https://<worker>/lookup?isbn=...&nocache=<the secret>`. A wrong token, or none set, is an ordinary request.
+- When done: `npx wrangler secret delete NOCACHE_TOKEN` and remove the `.dev.vars` line.
+
 ## Check by hand
 
 `npx wrangler dev` runs it locally on http://localhost:8787; `npm test` covers the parsing and the handler without the network.

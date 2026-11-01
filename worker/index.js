@@ -158,16 +158,19 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
         : json({}, 404, certain ? MISSING_SECONDS : UNSURE_SECONDS, { 'x-miss-reason': miss }); // the reason is for curl, when debugging
     }
 
+    // test-only bypass (ADR-0003): NO_CACHE=1 (local .dev.vars), or ?nocache=<secret NOCACHE_TOKEN>, which never matches while the secret is unset or empty
+    const bypass = Boolean(env.NO_CACHE) || (Boolean(env.NOCACHE_TOKEN) && url.searchParams.get('nocache') === env.NOCACHE_TOKEN);
     const cacheKey = new Request(`https://lookup.invalid/${key}`);
-    const cached = await cache.match(cacheKey);
+    const cached = bypass ? null : await cache.match(cacheKey);
     if (cached) return new Response(cached.body, { status: cached.status, headers: { ...Object.fromEntries(cached.headers), ...cors } });
 
     const limited = await env.LIMITER?.limit({ key: request.headers.get('cf-connecting-ip') ?? 'anonymous' });
     if (limited && !limited.success) return json({ error: 'slow down' }, 429, 0, cors);
 
     const response = await work();
-    await cache.put(cacheKey, response.clone());
-    return new Response(response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...cors } });
+    if (!bypass) await cache.put(cacheKey, response.clone());
+    const noStore = bypass ? { 'cache-control': 'no-store' } : {};
+    return new Response(response.body, { status: response.status, headers: { ...Object.fromEntries(response.headers), ...cors, ...noStore } });
   };
 }
 
