@@ -16,3 +16,11 @@ test('the manifest key gives the extension ID the Worker allows', () => {
   const id = createHash('sha256').update(der).digest('hex').slice(0, 32).replace(/./g, (c) => 'abcdefghijklmnop'[parseInt(c, 16)]);
   assert.ok(ALLOWED_ORIGINS.includes(`chrome-extension://${id}`));
 });
+
+test('auto-mode adds no install-time site access: sites are asked for one by one', () => {
+  const manifest = JSON.parse(read('../extension/manifest.json'));
+  assert.deepEqual(manifest.host_permissions, ['https://isbn-lookup.oleprota.workers.dev/*']);
+  assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*']);
+  assert.ok(manifest.permissions.includes('storage') && manifest.permissions.includes('scripting'));
+  assert.ok(manifest.options_ui?.page);
+});

@@ -20,3 +20,4 @@ Ideas that are not part of the current work. Move an item into the plan when it 
 - **Extension usage stats (after the extension in #6).** The Worker must tell extension events apart from website events (a source field on the event, and `worker/events.js` plus its schema), and ADR 0004's stats note must cover the extension.
 - **Extension: several books on one page and listing pages.** v1 reads only the one Page book of a book page. Listings show no ISBNs in their text, so this would mean fetching each product page, which ADR 0002 rules out; needs a new decision first.
 - **Extension on the Chrome Web Store.** v1 is unpacked only; the store needs a developer fee, a privacy policy and review.
+- **Extension auto-mode: skip list.** Auto-mode runs on every opted-in site. Not done: a blocklist of pages or paths inside such a site (search results, cart).

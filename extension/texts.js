@@ -15,3 +15,16 @@ export const frame = {
   loading: 'Шукаю книгу на Goodreads… 🔍',
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
 };
+
+export const auto = {
+  on: 'Автопошук на цьому сайті',
+  off: 'Вимкнути автопошук на цьому сайті',
+};
+
+export const options = {
+  title: 'Автопошук книги',
+  master: 'Шукати книгу автоматично на сайтах зі списку',
+  sites: 'Сайти з автопошуком',
+  empty: 'Поки жодного. Натисніть «Автопошук на цьому сайті» на картці книги.',
+  remove: 'Прибрати',
+};

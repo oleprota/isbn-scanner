@@ -19,6 +19,7 @@
     .body { min-width: 0; flex: 1; } .title { font-weight: 600; } .meta { opacity: .8; }
     .links { display: flex; gap: 12px; margin-top: 6px; } a { color: #1a56c8; }
     @media (prefers-color-scheme: dark) { a { color: #8ab4f8; } }
+    .site { position: static; margin-top: 6px; padding: 0; font-size: 12px; color: #1a56c8; text-decoration: underline; }
     button { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
     .none { padding: 8px 12px; }
     .wait { align-items: center; padding: 8px 12px; }
@@ -32,9 +33,11 @@
   frame.classList.add('wait');
   frame.append(spinner, box('span', t.loading));
   root.append(style, frame);
-  document.documentElement.append(host);
+  if (!t.auto) document.documentElement.append(host); // auto-mode stays invisible until it has something to say
 
+  let closed = false;
   const close = () => {
+    closed = true;
     host.remove();
     removeEventListener('keydown', onKey, true);
     globalThis.navigation?.removeEventListener('navigatesuccess', close);
@@ -71,7 +74,11 @@
     // the page's text including hidden tabs (shops keep the specs tab, with its ISBN, hidden), then its JSON data
     text: [allText(), ...read('script[type="application/json"]', null, data)].join('\n').slice(0, 400000),
   }).catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
-  if (!host.isConnected) return; // closed while waiting
+  if (closed) return; // closed while waiting
+  if (t.auto) {
+    if (problem === 'noIsbn') return close(); // silent when there is no book here
+    document.documentElement.append(host);
+  }
 
   frame.replaceChildren();
   frame.classList.remove('wait');
@@ -105,6 +112,12 @@
     links.append(link);
   }
   body.append(links);
+  const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
+  site.onclick = async () => {
+    const answer = await chrome.runtime.sendMessage({ toggleSite: true }).catch(() => null);
+    if (answer) site.textContent = answer.enabled ? t.autoOff : t.autoOn;
+  };
+  body.append(site);
   const x = box('button', '×');
   x.setAttribute('aria-label', t.close);
   x.onclick = close;
