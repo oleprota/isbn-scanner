@@ -13,8 +13,10 @@ if (!origins) {
   text.textContent = t.ask(origins[0].slice(4, -2));
   button.textContent = t.allow;
   button.onclick = async () => {
-    const granted = await chrome.permissions.request({ origins }).catch(() => false);
-    text.textContent = granted ? t.done : t.denied;
+    let granted = false;
+    let failure = '';
+    try { granted = await chrome.permissions.request({ origins }); } catch (error) { failure = ` (${error.message})`; } // Chrome refusing the request, vs the user declining
+    text.textContent = granted ? t.done : t.denied + failure;
     button.hidden = true;
   };
 }
