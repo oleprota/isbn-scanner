@@ -2,5 +2,6 @@
 export const frame = {
   notFound: 'На сторінці не знайдено книг',
   close: 'Закрити',
+  loading: 'Шукаю книгу…',
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
 };
