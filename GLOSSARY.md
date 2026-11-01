@@ -34,3 +34,8 @@ _Avoid_: Label, custom title
 
 **Found by title**:
 A book picked from the candidates for a typed title, so its site links search instead of using the ISBN.
+
+
+**Page book**:
+The book a web page is about, the one the browser extension shows a card for.
+_Avoid_: Current book
