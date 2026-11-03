@@ -17,6 +17,7 @@ import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
 import * as str from './strings.js';
 
 str.applyStrings(document);
+if (['localhost', '127.0.0.1'].includes(location.hostname)) document.title += str.page.localSuffix; // the local copy is told apart on the tab
 
 const form = document.getElementById('search');
 const input = document.getElementById('isbn');
@@ -263,7 +264,7 @@ function renderBook(book, isbn) {
   const original = el('div', null, 'original-slot');
   let settled = false;
   const note = (text) => el('p', text, 'original-note');
-  function offerOriginal(message) {
+  function offerOriginal(message, retryAt = 0) {
     const button = el('button', str.card.originalButton, 'original-button');
     button.type = 'button';
     button.addEventListener('click', async () => {
@@ -271,12 +272,21 @@ function renderBook(book, isbn) {
       button.replaceChildren(spinner(str.card.originalLooking), str.card.originalLooking);
       const answer = await lookupOriginal(isbn);
       if (answer?.original) original.replaceChildren(el('div', null, 'tear'), originalCard(answer.original));
-      else if (answer?.problem === 'no-original') original.replaceChildren(note(str.card.originalNone)); // a final answer: no retry
-      else return offerOriginal(answer?.problem === 'not-found' ? str.card.originalMissing : str.card.originalDown); // the button stays for a retry
+      else return offerOriginal(str.card.originalWhy(answer ?? {}), answer?.retryAt); // every failure keeps the button; a countdown first when the service asked for one
       settled = true;
     });
     original.replaceChildren(...[message && note(message), button].filter(Boolean));
-    if (message) button.focus(); // a retry: the focus was on the button that has just been replaced
+    // Goodreads did not answer and the service remembers it until `retryAt`: the button waits and counts down
+    const tick = () => {
+      const left = Math.ceil((retryAt - Date.now()) / 1000);
+      if (!button.isConnected || button.disabled === false && left <= 0) return; // the card moved on, or nothing to wait for
+      button.disabled = left > 0;
+      button.textContent = left > 0 ? `${str.card.originalButton} (${str.card.originalWait(left)})` : str.card.originalButton;
+      if (left > 0) setTimeout(tick, 1000);
+      else button.focus();
+    };
+    if (retryAt > Date.now()) tick();
+    else if (message) button.focus(); // a retry: the focus was on the button that has just been replaced
   }
   const setOriginal = (found) => {
     if (!settled && found && !original.firstChild) offerOriginal();

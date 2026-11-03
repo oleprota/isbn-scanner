@@ -1,7 +1,7 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
 import { pickIsbn } from './pickIsbn.js';
-import { THIN_RATING_COUNT, isThin, lookupBook, lookupOriginal } from './shared/lookup.js';
+import { ORIGINAL_RETRY_SECONDS, THIN_RATING_COUNT, isThin, lookupBook, lookupOriginal } from './shared/lookup.js';
 import { isbnLinks } from './shared/links.js';
 import { card as cardTexts, formatRating } from './shared/strings.js';
 import { frame, auto as autoTexts } from './texts.js';
@@ -16,7 +16,7 @@ async function inject(tabId, url, auto) {
   const target = { tabId };
   const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
     thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, originalButton: cardTexts.originalButton, originalLooking: cardTexts.originalLooking,
-    originalLabel: cardTexts.originalLabel, originalMissing: cardTexts.originalMissing, originalNone: cardTexts.originalNone, originalDown: cardTexts.originalDown };
+    originalLabel: cardTexts.originalLabel, originalMissing: cardTexts.originalMissing, originalNone: cardTexts.originalNone, originalDown: cardTexts.originalDown(ORIGINAL_RETRY_SECONDS) };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }

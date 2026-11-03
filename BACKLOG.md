@@ -19,6 +19,7 @@ Ideas that are not part of the current work. Move an item into the plan when it 
 
 ## Later
 - **Scanner, what is left after the 2026-10-27 bench.** Done: 1080p and continuous focus asked for, a frame every 250 ms, a fresh `<video>` for every start, and the reader stays zxing-js (a native `BarcodeDetector` and zxing-wasm were no better on an iPhone and an Android phone; the numbers are in the git history, `d37a832`). Not tried: a torch toggle for dim shops (Chrome on Android only; iOS gives pages no torch), decoding EAN-13 only (the reader tries every 1D format), cropping the frame before decoding.
+- **Camera window: flashlight switch (off / on / auto).** A three-way switch in the scanner window for the camera's torch. Android Chrome only (iOS gives pages no torch), so hide it where `getCapabilities().torch` is missing. Auto would turn the torch on when frames are too dark to decode.
 - **Installable PWA / offline shell** (service worker) for phone use.
 - **Extension usage stats (after the extension in #6).** The Worker must tell extension events apart from website events (a source field on the event, and `worker/events.js` plus its schema), and ADR 0004's stats note must cover the extension.
 - **Extension: several books on one page and listing pages.** v1 reads only the one Page book of a book page. Listings show no ISBNs in their text, so this would mean fetching each product page, which ADR 0002 rules out; needs a new decision first.

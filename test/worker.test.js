@@ -256,7 +256,8 @@ test('/lookup&original=1 answers the original: name, rating and Goodreads link; 
   const { get, calls } = setup(original([found({ bookId: '5', author: { name: 'A B' } }), found()]));
   const response = await get(`?isbn=${ISBN}&original=1`);
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { original: { title: 'The Way of Kings', author: 'A', rating: { value: 4.65, count: 90 }, image: 'https://i.gr-assets.com/a.jpg', url: 'https://www.goodreads.com/book/show/77' } });
+  assert.deepEqual(await response.json(), { original: { title: 'The Way of Kings', author: 'A', rating: { value: 4.65, count: 90 }, image: 'https://i.gr-assets.com/a.jpg', sameWork: false, url: 'https://www.goodreads.com/book/show/77' } });
+  assert.equal(calls.length, 2, 'one page, one search: no word dropping');
   assert.ok(calls[1].startsWith('https://www.goodreads.com/book/auto_complete?format=json&q=Orig%20A'));
 });
 
@@ -265,21 +266,45 @@ test('/lookup&original=1 answers the translation own work too, even with an unre
   assert.equal((await (await get(`?isbn=${ISBN}&original=1`)).json()).original.url, 'https://www.goodreads.com/book/show/77');
 });
 
-test('/lookup&original=1 is 404 and says why: no hint, no hits, other author, two different works, Goodreads empty or failing', async () => {
-  const empty = new Response('', { status: 202 });
+test('/lookup&original=1 says "same work" when the hit is the translation own work', async () => {
+  const body = await (await setup(original([found({ workId: WORK })])).get(`?isbn=${ISBN}&original=1`)).json();
+  assert.equal(body.original.sameWork, true);
+});
+
+test('/lookup&original=1 is 404 and says exactly why, for every page and search failure', async () => {
+  const searchOnly = (response) => (url) => (url.includes('auto_complete') ? response() : goodreads(stateOf('Orig'))());
+  const noAuthor = html.replace('"author"', '"x"');
   const cases = [
-    [goodreads(), 'no-original'],
-    [original([]), 'not-found'],
-    [original([found({ author: { name: 'Other' } })]), 'not-found'],
-    [original([found(), found({ workId: '1000' })]), 'not-found'],
-    [(url) => (url.includes('auto_complete') ? new Response('', { status: 500 }) : goodreads(stateOf('Orig'))()), 'unavailable'],
-    [() => empty.clone(), 'unavailable'],
-    [() => { throw new TypeError('network'); }, 'unavailable'],
+    [goodreads('', 404), 'page-404'],
+    [goodreads('', 202), 'page-empty'],
+    [goodreads('', 403), 'page-refused'],
+    [goodreads('', 429), 'page-refused'],
+    [goodreads('', 500), 'page-down'],
+    [() => { throw new TypeError('network'); }, 'page-down'],
+    [goodreads('<p>no data</p>'), 'page-no-book'],
+    [goodreads(noAuthor), 'page-no-author'],
+    [goodreads(), 'page-no-original'],
+    [goodreads(`${html}${' '.repeat(900_000)}`), 'page-too-long'],
+    [goodreads(stateOf('Own')), 'page-same-title'],
+    [(url) => (url.includes('auto_complete') ? suggestions([])() : goodreads(stateOf('Orig').replace('work/shelves/111-x', 'work/x'))()), 'page-no-work'],
+    [searchOnly(() => new Response('', { status: 500 })), 'search-failed'],
+    [original([]), 'search-empty'],
+    [original([found({ author: { name: 'Other' } })]), 'search-other-author'],
+    [original([found({ ratingsCount: 0 })]), 'search-no-rating'],
+    [original([found({ workId: '' })]), 'search-no-work'],
+    [original([found(), found({ workId: '1000' })]), 'search-ambiguous'],
   ];
   for (const [respond, reason] of cases) {
     const response = await setup(respond).get(`?isbn=${ISBN}&original=1`);
-    assert.equal(response.status, 404);
-    assert.deepEqual(await response.json(), { reason });
+    assert.equal(response.status, 404, reason);
+    const body = await response.json();
+    if (['page-empty', 'page-refused', 'page-down', 'search-failed'].includes(reason)) {
+      assert.ok(body.until > Date.now() && body.until <= Date.now() + 180_000, `${reason}: until is ~3 minutes ahead`);
+      delete body.until;
+    }
+    if (reason.startsWith('search-e') || reason === 'search-other-author') assert.equal(body.title, 'Orig'); // the words to show
+    delete body.title;
+    assert.deepEqual(body, { reason });
   }
 });
 

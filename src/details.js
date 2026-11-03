@@ -64,11 +64,12 @@ export function coverImage(src) {
 
 // The cover, then "Оригінал", the name and the rating (same orange count and warning when thin), and a Goodreads button
 // at the right edge. No Ereadian link.
-export function originalCard({ title, rating, url, image }) {
+export function originalCard({ title, rating, url, image, sameWork }) {
   const box = el('div', null, 'original-card');
   const text = el('div', null, 'original-text');
   text.append(el('p', card.originalLabel, 'original-label'), el('p', title, 'original-title'));
   if (rating) text.append(ratingBlock(rating));
+  if (sameWork) text.append(el('p', card.originalSameWork, 'original-note'));
   const link = linkButton({ name: 'Goodreads', url, icon: 'icons/goodreads.png', title: card.linkTitle(title, 'Goodreads') });
   link.classList.add('original-link');
   box.append(...(image ? [coverImage(image)] : []), text, link);

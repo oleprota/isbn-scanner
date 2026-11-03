@@ -95,16 +95,24 @@ const squash = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 // The original of a translation, from the page's embedded state (an unofficial shape: any change gives null):
 // { title, author, workId } with the page's own work id (only title and author go out in the answer), or null
 // when the page names no original title, or the book's own title (a book that is not a translation).
-export function parseOriginal(html) {
+export const parseOriginal = (html) => originalOrWhy(html).found ?? null;
+
+// The same, but a page with no original says why: { found } or { why } with why one of
+// page-no-book (no Book block: the page format may have changed), page-no-author, page-no-original, page-too-long (`cut`: only the
+// start of the page was read), page-same-title (not a translation).
+export function originalOrWhy(html, cut = false) {
   try {
-    const match = /"originalTitle":("(?:[^"\\]|\\.)*")/.exec(html);
     const book = findBook(html);
+    if (!book) return { why: 'page-no-book' };
+    const author = firstAuthor(book.author)?.name;
+    if (!author) return { why: 'page-no-author' };
+    const match = /"originalTitle":("(?:[^"\\]|\\.)*")/.exec(html);
     const title = text(match && JSON.parse(match[1]), 200);
-    const author = firstAuthor(book?.author)?.name;
-    if (!title || !author || squash(title) === squash(splitTitle(text(book.name, 200)).title)) return null;
-    return { title, author, workId: /work\/shelves\/(\d+)/.exec(html)?.[1] ?? '' };
+    if (!title) return { why: cut ? 'page-too-long' : 'page-no-original' };
+    if (squash(title) === squash(splitTitle(text(book.name, 200)).title)) return { why: 'page-same-title' };
+    return { found: { title, author, workId: /work\/shelves\/(\d+)/.exec(html)?.[1] ?? '' } };
   } catch {
-    return null;
+    return { why: 'page-no-book' };
   }
 }
 
