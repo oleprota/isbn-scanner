@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHandler } from '../worker/index.js';
 
 const ISBN = '9786171299412'; // valid; see test/fixtures/isbns.json for more
@@ -233,4 +234,77 @@ test('/search gives up after a few tries, and a failure stops the dropping', asy
   const down = await setup((url) => { failing.push(url); return new Response('x', { status: 500 }); }).request('/search?q=a%20b%20c');
   assert.equal(down.status, 502);
   assert.equal(failing.length, 1); // not asked again with fewer words
+});
+
+// --- the original of a translation (issue #9) ---
+const translated = readFileSync(new URL('./fixtures/goodreads-translated.html', import.meta.url), 'utf8'); // a real page's excerpt
+const stateOf = (original, own = 'Own') => `${html.replace('"Title"', JSON.stringify(own))}<script>{"shelvesUrl":"https://www.goodreads.com/work/shelves/111-x","originalTitle":${JSON.stringify(original)},"x":1}</script>`;
+const WORK = '111';
+
+test('the first answer never carries the original (it is asked for on request)', async () => {
+  for (const page of [html, translated, stateOf('Orig')]) {
+    const body = await (await setup(goodreads(page)).get(`?isbn=${ISBN}`)).json();
+    assert.equal('original' in body, false, page.slice(0, 80));
+  }
+});
+
+const found = (extra = {}) => hit({ bookId: '77', workId: '999', bookTitleBare: 'The Way of Kings', avgRating: '4.65', ratingsCount: 90, author: { name: 'A' }, ...extra });
+// the page of the translation, then the search
+const original = (hits) => (url) => (url.includes('auto_complete') ? suggestions(hits)() : goodreads(stateOf('Orig'))());
+
+test('/lookup&original=1 answers the original: name, rating and Goodreads link; the author must match exactly', async () => {
+  const { get, calls } = setup(original([found({ bookId: '5', author: { name: 'A B' } }), found()]));
+  const response = await get(`?isbn=${ISBN}&original=1`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { original: { title: 'The Way of Kings', author: 'A', rating: { value: 4.65, count: 90 }, url: 'https://www.goodreads.com/book/show/77' } });
+  assert.ok(calls[1].startsWith('https://www.goodreads.com/book/auto_complete?format=json&q=Orig%20A'));
+});
+
+test('/lookup&original=1 says "same data" when the work is the translation own', async () => {
+  const { get } = setup(original([found({ workId: WORK })]));
+  assert.deepEqual(await (await get(`?isbn=${ISBN}&original=1`)).json(), { same: true });
+});
+
+test('/lookup&original=1 is 404 for: no hint, no hits, other author, two different works, a failing search', async () => {
+  const cases = [
+    goodreads(),
+    original([]),
+    original([found({ author: { name: 'Other' } })]),
+    original([found(), found({ workId: '1000' })]),
+    (url) => (url.includes('auto_complete') ? new Response('', { status: 500 }) : goodreads(stateOf('Orig'))()),
+  ];
+  for (const respond of cases) assert.equal((await setup(respond).get(`?isbn=${ISBN}&original=1`)).status, 404);
+});
+
+test('/lookup&original=1 never trusts an empty work id: no "same", no ambiguity passing on empty ids', async () => {
+  const noWork = stateOf('Orig').replace('work/shelves/111-x', 'work/x');
+  const cases = [
+    (url) => (url.includes('auto_complete') ? suggestions([found({ workId: '' })])() : goodreads(noWork)()),
+    (url) => (url.includes('auto_complete') ? suggestions([found({ workId: '' })])() : goodreads(stateOf('Orig'))()),
+    original([found({ workId: '' }), found({ workId: '' })]),
+  ];
+  for (const respond of cases) assert.equal((await setup(respond).get(`?isbn=${ISBN}&original=1`)).status, 404);
+});
+
+test('the original title is found when the page comes in tiny chunks (marker, </script>, long escaped title cut by edges)', async () => {
+  const long = '\\u0436'.repeat(200); // 1200 characters as escapes
+  const page = stateOf('Orig').replace('"originalTitle":"Orig"', `"originalTitle":"${long}"`);
+  const bytes = new TextEncoder().encode(page + '<p>x</p>'.repeat(5000));
+  let at = 0;
+  const body = new ReadableStream({ pull(c) { if (at >= bytes.length) return c.close(); c.enqueue(bytes.slice(at, at + 13)); at += 13; } });
+  const respond = (url) => (url.includes('auto_complete') ? suggestions([found()])() : Object.defineProperty(new Response(body), 'url', { value: 'https://www.goodreads.com/book/show/1' }));
+  const response = await setup(respond).get(`?isbn=${ISBN}&original=1`);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).original.title, 'The Way of Kings');
+  assert.ok(at < page.length + 200, 'reading stopped at the title, not at the end of the page');
+});
+
+test('the original is cached on its own, apart from the first answer', async () => {
+  const { get, calls } = setup(original([found()]));
+  await get(`?isbn=${ISBN}&original=1`);
+  const asked = calls.length;
+  await get(`?isbn=${ISBN}&original=1`);
+  assert.equal(calls.length, asked);
+  await get(`?isbn=${ISBN}`); // the first answer is its own entry
+  assert.ok(calls.length > asked);
 });

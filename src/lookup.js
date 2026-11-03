@@ -25,8 +25,6 @@ export function cleanAnswer(data) {
   if (!title) return null;
   const seriesName = clean(data.series?.name, 80);
   const authorName = clean(data.author?.name, 100);
-  const value = Number(data.rating?.value);
-  const count = Number(data.rating?.count);
   return {
     title,
     image: typeof data.image === 'string' && data.image.startsWith('https://') ? data.image : '',
@@ -34,8 +32,28 @@ export function cleanAnswer(data) {
     author: authorName
       ? { name: authorName, url: typeof data.author.url === 'string' && data.author.url.startsWith(AUTHOR_URL) ? data.author.url : '' }
       : null,
-    rating: value > 0 && value <= 5 && Number.isInteger(count) && count > 0 ? { value, count } : null,
+    rating: cleanRating(data.rating),
   };
+}
+
+// A rating count under this is too small to trust (the Card shows it orange, with a warning). The page and the extension share it.
+export const THIN_RATING_COUNT = 100;
+export const isThin = (rating) => Boolean(rating) && rating.count < THIN_RATING_COUNT;
+
+function cleanRating(rating) {
+  const value = Number(rating?.value);
+  const count = Number(rating?.count);
+  return value > 0 && value <= 5 && Number.isInteger(count) && count > 0 ? { value, count } : null;
+}
+
+// What the service said to `original=1`: { same: true } (the original shares its data with the book), or
+// { original: { title, author, url, rating } } (it needs a title and a Goodreads book page url), or null.
+export function cleanOriginal(data) {
+  if (data?.same === true) return { same: true };
+  const title = clean(data?.original?.title, 120);
+  const url = data?.original?.url;
+  if (!title || typeof url !== 'string' || !url.startsWith('https://www.goodreads.com/book/show/')) return null;
+  return { original: { title, author: clean(data.original.author, 100), rating: cleanRating(data.original.rating), url } };
 }
 
 // The candidates of a title search: up to 5 of { id, title, author, image }, or null when the answer is not a list of results.
@@ -87,6 +105,7 @@ async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, tim
 }
 
 export const lookupBook = (isbn, options) => ask('lookup', { isbn, v: SHAPE }, cleanAnswer, options);
+export const lookupOriginal = (isbn, options) => ask('lookup', { isbn, original: 1, v: SHAPE }, cleanOriginal, options);
 // null = the search failed; [] = it found nothing
 export const searchBooks = (query, options) => ask('search', { q: query }, cleanResults, { timeout: SEARCH_TIMEOUT_MS, ...options });
 export const editionOfBook = (id, options) => ask('book', { id }, cleanEdition, options);

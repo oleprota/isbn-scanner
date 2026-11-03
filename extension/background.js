@@ -1,9 +1,9 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
 import { pickIsbn } from './pickIsbn.js';
-import { lookupBook } from './shared/lookup.js';
+import { THIN_RATING_COUNT, isThin, lookupBook, lookupOriginal } from './shared/lookup.js';
 import { isbnLinks } from './shared/links.js';
-import { formatRating } from './shared/strings.js';
+import { card as cardTexts, formatRating } from './shared/strings.js';
 import { frame, auto as autoTexts } from './texts.js';
 import { sitePatterns, hostPatterns, sitesFromOrigins } from './sites.js';
 
@@ -14,7 +14,9 @@ async function inject(tabId, url, auto) {
   const patterns = sitePatterns(url);
   const enabled = !!patterns && await chrome.permissions.contains({ origins: patterns });
   const target = { tabId };
-  const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off };
+  const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
+    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, originalButton: cardTexts.originalButton, originalLooking: cardTexts.originalLooking,
+    originalLabel: cardTexts.originalLabel, originalSame: cardTexts.originalSame, originalMissing: cardTexts.originalMissing };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -97,6 +99,10 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     return true;
   }
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
+  if (page.originalFor) { // the card's "find the original" button: { same } | { original } | null
+    lookupOriginal(page.originalFor).then((answer) => respond(answer?.original ? { original: { ...answer.original, rating: shapeRating(answer.original.rating) } } : answer));
+    return true;
+  }
   (async () => {
     const isbn = pickIsbn(page);
     if (!isbn) return respond({ problem: 'noIsbn' });
@@ -105,13 +111,17 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     const details = await lookupBook(isbn, { report: (result) => { outcome = result; } });
     if (!details) return respond({ problem: outcome });
     const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
-    const rating = details?.rating ? formatRating(details.rating) : null;
-    respond({
-      card: { ...details, links, rating: rating && { value: rating.value, count: rating.count, title: frame.ratingTitle(rating.value, rating.count) } },
-    });
+    respond({ card: { ...details, isbn, links, rating: shapeRating(details.rating) } });
   })();
   return true; // the answer comes later
 });
+
+// A rating as the card shows it: the formatted value and count, its tooltip, and whether it is thin (orange, with a warning).
+const shapeRating = (rating) => {
+  if (!rating) return null;
+  const { value, count } = formatRating(rating);
+  return { value, count, title: frame.ratingTitle(value, count), thin: isThin(rating) };
+};
 
 // The card's link: opt the site out right away, or open grant.html to opt it in (Chrome allows the permission prompt
 // only after a click on an extension page). The answer is whether the site is on now.

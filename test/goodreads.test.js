@@ -90,5 +90,5 @@ test('parseEdition is the book with the edition\'s ISBN when it is valid, else n
 
 test('parseCandidates keeps id and title, cleans the rest, and is null for a non-list', () => {
   assert.equal(parseCandidates({}), null);
-  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '' }]);
+  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '', workId: '', rating: null }]);
 });

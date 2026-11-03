@@ -8,6 +8,7 @@
   --link: #2f6f6b;
   --accent: #2f6f6b;
   --star: #b7791f; /* the rating star: 3:1 against the card */
+  --thin: #b34a00; /* a rating on few votes: its count and warning icon (darker on light, lighter on dark: each 4.5:1 on its card) */
   --on-accent: #fff;
   --line: #e4dcc9;
 }
@@ -22,6 +23,7 @@
     --link: #3acb89;
     --accent: #3acb89;
     --star: #f2b84b;
+    --thin: #f08a3c;
     --on-accent: #052e1f;
     --line: #3a3a38;
   }
@@ -37,6 +39,7 @@
   --link: #3acb89;
   --accent: #3acb89;
   --star: #f2b84b;
+  --thin: #f08a3c;
   --on-accent: #052e1f;
   --line: #3a3a38;
 }
@@ -92,6 +95,25 @@ body:has(#scanner:not([hidden])) #status:empty { display: block; }
 .rating-star { flex: none; width: 1.5rem; height: 1.5rem; fill: var(--star); }
 .rating-value { font-size: 2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .rating-count { font-size: .95rem; color: var(--muted); font-variant-numeric: tabular-nums; align-self: flex-end; padding-bottom: .1rem; }
+.rating-count.thin, .row-thin { color: var(--thin); }
+/* the warning icon beside a thin count: a button on the card (opens a popover), only a tooltip in list rows */
+.thin-warning { flex: none; align-self: flex-end; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--thin); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.row-thin { cursor: help; }
+.thin-wrap { display: contents; }
+.thin-popover { box-sizing: border-box; position: fixed; inset: auto; margin: 0; max-width: 14rem; padding: .6rem .75rem; border: 1px solid var(--thin); border-radius: 8px; background: var(--card); color: var(--fg); font-size: .9rem; line-height: 1.35; box-shadow: 0 4px 16px #0004; }
+/* The original: a smaller card under a dotted tear seam (the notches are the ticket's), or a button to look it up. */
+.original-slot:not(:empty) { margin-top: 1rem; }
+.original-button { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; }
+.original-button:disabled { cursor: default; }
+.original-note { margin: .5rem 0 0; color: var(--muted); font-size: .9rem; }
+.tear { position: relative; margin: 1rem -1rem 0; border-top: 2px dotted var(--line); }
+.original-card { padding-top: .75rem; }
+.original-card .original-label { margin: 0; color: var(--muted); font-size: .85rem; }
+.original-card .original-title { margin: .1rem 0 0; font-size: 1.05rem; line-height: 1.25; overflow-wrap: anywhere; }
+.original-card .rating { margin-top: .3rem; }
+.original-card .rating-star { width: 1.1rem; height: 1.1rem; }
+.original-card .rating-value { font-size: 1.3rem; }
+.original-card a { display: inline-block; margin-top: .4rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Series and author under the head: a muted label and the name as a link; long names wrap instead of being cut. */
 .facts-slot:not(:empty) { margin-top: .9rem; padding-top: .6rem; border-top: 1px solid var(--line); }

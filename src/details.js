@@ -3,6 +3,7 @@
 import { el } from './dom.js';
 import { card, formatRating } from './strings.js';
 import { goodreadsSearch } from './links.js';
+import { THIN_RATING_COUNT, isThin } from './lookup.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -22,8 +23,45 @@ export function ratingBlock(rating) {
   const { value, count } = formatRating(rating);
   const block = el('p', null, 'rating');
   block.title = card.ratingTitle(value, count);
-  block.append(starIcon(), el('span', `${card.ratingLabel}: `, 'sr-only'), el('strong', value, 'rating-value'), el('span', `(${count})`, 'rating-count'));
+  const countText = el('span', `(${count})`, 'rating-count');
+  block.append(starIcon(), el('span', `${card.ratingLabel}: `, 'sr-only'), el('strong', value, 'rating-value'), countText);
+  if (isThin(rating)) {
+    countText.classList.add('thin');
+    block.append(thinButton());
+  }
   return block;
+}
+
+// The warning beside a thin count: a button that opens a native popover (no layout shift: it floats in the top layer)
+// with the reason. Light dismiss (a tap outside) and Escape close it.
+function thinButton() {
+  const text = card.thinTitle(THIN_RATING_COUNT);
+  const button = el('button', '⚠\uFE0E', 'thin-warning');
+  button.type = 'button';
+  button.setAttribute('aria-label', `${card.thinLabel}: ${text}`);
+  const popover = el('div', text, 'thin-popover');
+  popover.popover = 'auto';
+  button.popoverTargetElement = popover;
+  popover.addEventListener('beforetoggle', (event) => {
+    if (event.newState !== 'open') return;
+    const at = button.getBoundingClientRect(); // below the icon, kept inside the window
+    popover.style.top = `${at.bottom + 6}px`;
+    popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 224 - 8))}px`;
+  });
+  const wrap = el('span', null, 'thin-wrap');
+  wrap.append(button, popover);
+  return wrap;
+}
+
+// "Оригінал", the name, the rating (same orange count and warning when thin) and a Goodreads link. No Ereadian link.
+export function originalCard({ title, rating, url }) {
+  const box = el('div', null, 'original-card');
+  box.append(el('p', card.originalLabel, 'original-label'), el('p', title, 'original-title'));
+  if (rating) box.append(ratingBlock(rating));
+  const link = outsideLink(url, 'Goodreads');
+  link.title = card.linkTitle(title, 'Goodreads');
+  box.append(link);
+  return box;
 }
 
 function outsideLink(href, text) {

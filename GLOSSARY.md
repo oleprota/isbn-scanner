@@ -39,3 +39,11 @@ A book picked from the candidates for a typed title, so its site links search in
 **Page book**:
 The book a web page is about, the one the browser extension shows a card for.
 _Avoid_: Current book
+
+**Original**:
+The source-language book of a translation, found on demand, when the user taps the button on any looked-up Book: the worker reads the original title and author from the Goodreads page then; shown as a smaller sub-card on the Card, never stored.
+_Avoid_: Source book
+
+**Thin rating**:
+A rating whose count is under `THIN_RATING_COUNT` (100); shown with an orange count and a warning icon.
+_Avoid_: Weak rating, low rating

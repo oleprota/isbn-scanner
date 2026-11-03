@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanAnswer, editionOfBook, lookupBook, searchBooks, setNoCache } from '../src/lookup.js';
+import { THIN_RATING_COUNT, cleanAnswer, editionOfBook, isThin, lookupBook, lookupOriginal, searchBooks, setNoCache } from '../src/lookup.js';
 
 const URL_ = 'https://lookup.example';
 const answer = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
@@ -112,4 +112,25 @@ test('setNoCache adds nocache=1 to requests until switched off', async () => {
   await lookupBook('1', { url: 'https://w', fetchFn });
   assert.match(urls[0], /nocache=1/);
   assert.doesNotMatch(urls[1], /nocache/);
+});
+
+test('a rating is thin under THIN_RATING_COUNT, not at it', () => {
+  assert.equal(THIN_RATING_COUNT, 100);
+  assert.equal(isThin({ value: 4, count: 99 }), true);
+  assert.equal(isThin({ value: 4, count: 100 }), false);
+  assert.equal(isThin({ value: 4, count: 101 }), false);
+  assert.equal(isThin(null), false);
+});
+
+test('lookupOriginal asks for the original and checks what comes back', async () => {
+  let requested;
+  const ask = (body, status) => lookupOriginal('9786171299412', { url: URL_, fetchFn: async (url) => { requested = url; return answer(body, status)(); } });
+  const original = { title: ' Way ', author: 'A', rating: { value: 4.6, count: 90 }, url: 'https://www.goodreads.com/book/show/77' };
+  assert.deepEqual(await ask({ original }), { original: { ...original, title: 'Way' } });
+  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&original=1&v=6`);
+  assert.deepEqual(await ask({ same: true }), { same: true });
+  assert.equal((await ask({ original: { ...original, rating: { value: 9, count: 1 } } })).original.rating, null);
+  assert.equal(await ask({ original: { ...original, url: 'javascript:1' } }), null);
+  for (const bad of [{}, { original: { title: 'x' } }, { original: null }]) assert.equal(await ask(bad), null);
+  assert.equal(await ask({}, 404), null);
 });
