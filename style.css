@@ -176,11 +176,11 @@ body:has(#scanner:not([hidden])) #status:empty { display: block; }
 /* One line per book: the name on the left (cut with an ellipsis when it is too long; the card shows it in
    full), then the two site icons and the star or cross together at the right edge. The buttons are 36px so that
    a standard name like "ISBN 9789661092999" still fits in full next to them at 360px. */
-.book-list li { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; padding: .35rem 0; } /* wraps only when the row is too narrow to give the name 8rem (very small screens, huge fonts): the buttons then drop under it, still right-aligned */
+.book-list li { display: flex; align-items: center; gap: .25rem .5rem; padding: .35rem 0; } /* one line always: the name gives way (ellipsis), the rating and buttons keep their size */
 .row-rating { flex: none; display: inline-flex; align-items: center; gap: .2rem; font-size: .95rem; font-variant-numeric: tabular-nums; color: var(--muted); }
 .row-star { color: var(--star); }
 .row-actions { display: flex; flex: none; align-items: center; gap: .375rem; margin-left: auto; }
-.book-list .open { display: block; flex: 1 1 8rem; min-width: 0; padding: .1em .15em .3em; margin-left: -.15em; border-radius: 0; border: 0; background: none; color: var(--link); font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.book-list .open { display: block; flex: 1 1 0; min-width: 0; padding: .1em .15em .3em; margin-left: -.15em; border-radius: 0; border: 0; background: none; color: var(--link); font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .icon { min-width: 2.75rem; min-height: 2.75rem; font-size: 1.2rem; line-height: 1; padding: 0 .55rem; cursor: pointer; } /* a touch-sized target (the card's star) */
 .book-list .icon { min-width: 2.25rem; min-height: 2.25rem; padding: 0; font-size: 1.1rem; }
 .book-list .icon-link { width: 2.25rem; height: 2.25rem; }
