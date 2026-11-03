@@ -83,9 +83,29 @@ export function parseCandidates(data) {
       title: text(b?.bookTitleBare ?? b?.title, 120),
       author: text(b?.author?.name, 100),
       image: typeof b?.imageUrl === 'string' && b.imageUrl.startsWith('https://') ? b.imageUrl : '',
+      workId: String(b?.workId ?? ''),
+      rating: ratingOf({ ratingValue: b?.avgRating, ratingCount: b?.ratingsCount }),
     }))
     .filter((b) => /^\d{1,12}$/.test(b.id) && b.title)
     .slice(0, 5);
+}
+
+const squash = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+// The original of a translation, from the page's embedded state (an unofficial shape: any change gives null):
+// { title, author, workId } with the page's own work id (only title and author go out in the answer), or null
+// when the page names no original title, or the book's own title (a book that is not a translation).
+export function parseOriginal(html) {
+  try {
+    const match = /"originalTitle":("(?:[^"\\]|\\.)*")/.exec(html);
+    const book = findBook(html);
+    const title = text(match && JSON.parse(match[1]), 200);
+    const author = firstAuthor(book?.author)?.name;
+    if (!title || !author || squash(title) === squash(splitTitle(text(book.name, 200)).title)) return null;
+    return { title, author, workId: /work\/shelves\/(\d+)/.exec(html)?.[1] ?? '' };
+  } catch {
+    return null;
+  }
 }
 
 // What the answer holds, from the page's Book block (null = no title, no data).

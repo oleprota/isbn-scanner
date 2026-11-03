@@ -14,6 +14,7 @@
 import { createKeyed } from './keyed.js';
 import { cleanText } from './text.js';
 import { card } from './strings.js';
+import { isThin } from './lookup.js';
 
 export const DETAILS_VERSION = 5;
 export const NAME_MAX = 120;
@@ -57,6 +58,8 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
     detailsCurrent: (isbn) => looked.get(isbn)?.v === DETAILS_VERSION,
     // isbn -> rating value, for the books that have one (the lists show it)
     ratings: () => new Map(looked.all().filter((e) => e.rating).map((e) => [e.isbn, e.rating.value])),
+    // isbns whose rating is thin (the lists mark them)
+    thinRatings: () => new Set(looked.all().filter((e) => isThin(e.rating)).map((e) => e.isbn)),
     // Stores what the lookup found. A found title only replaces the default `ISBN <number>` or the title an
     // earlier lookup of this book gave (older versions kept the series bracket in it): never a typed name or
     // another title. Rows in the lists are replaced that way; the returned `replaces(title)` tells the same

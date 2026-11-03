@@ -23,6 +23,10 @@ export const page = {
   title: 'Сканер ISBN',
   heading: 'Сканер ISBN',
   statsNote: (id, dev) => `Анонімна статистика (не про вас чи книжки) · ваш ID: ${id}${dev ? ' · dev' : ''}`,
+  dev: {
+    summary: 'Для розробника',
+    cache: 'Кешувати результати пошуку (за замовчуванням: увімк.)',
+  },
 };
 
 export const theme = {
@@ -61,6 +65,13 @@ export const card = {
   isbnTitle: (isbn) => `ISBN ${isbn}`,
   ratingLabel: 'Рейтинг на Goodreads',
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
+  thinTitle: (threshold) => `Менше ${threshold} оцінок — рейтинг ненадійний`, // the warning icon's popover and tooltip
+  thinLabel: 'Попередження про рейтинг',
+  originalButton: 'Знайти оригінал',
+  originalLooking: 'Шукаю оригінал…',
+  originalLabel: 'Оригінал',
+  originalSame: 'Дані оригіналу й перекладу однакові',
+  originalMissing: 'Оригінал не знайдено',
   seriesLabel: 'Серія',
   authorLabel: 'Автор',
   nameLabel: 'Назва книги',

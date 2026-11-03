@@ -2,6 +2,7 @@ import { el, linkButton, spinner } from './dom.js';
 import { books, card, lists, search } from './strings.js';
 import { SORTS, sortBooks } from './sort.js';
 import { isbnLinks } from './links.js';
+import { THIN_RATING_COUNT } from './lookup.js';
 
 // An icon-only button still needs a name for screen readers, and a tooltip for the mouse.
 export function iconButton(icon, label) {
@@ -45,11 +46,16 @@ export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {}
 }
 
 // "★ 4.66": a rating in a list row (no count). A screen reader gets "Рейтинг на Goodreads: 4.66".
-function ratingTag(value) {
+function ratingTag(value, thin) {
   const tag = el('span', null, 'row-rating');
   const star = el('span', '★', 'row-star');
   star.setAttribute('aria-hidden', 'true');
   tag.append(star, el('span', `${card.ratingLabel}: `, 'sr-only'), value.toFixed(2));
+  if (thin) { // only a tooltip here; the card has the popover
+    const warning = el('span', '⚠\uFE0E', 'row-thin');
+    warning.title = card.thinTitle(THIN_RATING_COUNT);
+    tag.append(warning, el('span', card.thinTitle(THIN_RATING_COUNT), 'sr-only'));
+  }
   return tag;
 }
 
@@ -65,7 +71,7 @@ function ratingTag(value) {
 //   onCopy(ok): the Copy button was used (for the usage stats); notify(text, isError): status line; elements: { section, count, items, empty, copy, clear }
 // The section (a <details>) opens by itself when the list stops being empty (on load, or at the
 // first book added, also while scanning); after that the user's open/closed choice is left alone.
-export function createListView({ list, confirmClear, rowButton, onOpen, onChange, isWaiting = () => false, ratings = () => new Map(), foundBy = () => new Map(), sortMode = 'date', onSort = () => {}, onCopy = () => {}, notify, elements }) {
+export function createListView({ list, confirmClear, rowButton, onOpen, onChange, isWaiting = () => false, ratings = () => new Map(), thinRatings = () => new Set(), foundBy = () => new Map(), sortMode = 'date', onSort = () => {}, onCopy = () => {}, notify, elements }) {
   const { section, count, items, empty, copy, clear } = elements;
   let locked = false;
   let wasEmpty = true;
@@ -86,6 +92,7 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
     if (stale) return;
     const rated = ratings();
     const found = foundBy();
+    const thin = thinRatings();
     items.replaceChildren(...ordered(all, rated).map((book) => {
       const item = el('li');
       const open = el('button', book.title, 'open');
@@ -101,7 +108,7 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
       item.append(open);
       // the spinner and the rating share one place; the rating (the star and the value only) comes once the lookup is over
       if (isWaiting(book.isbn)) item.append(spinner(search.lookingUp));
-      else if (rated.has(book.isbn)) item.append(ratingTag(rated.get(book.isbn)));
+      else if (rated.has(book.isbn)) item.append(ratingTag(rated.get(book.isbn), thin.has(book.isbn)));
       item.append(actions);
       return item;
     }));

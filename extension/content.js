@@ -12,10 +12,10 @@
   const style = document.createElement('style');
   style.textContent = `
     :host { all: initial; }
-    .frame { --card: #fffdf8; --fg: #2a2823; --muted: #5e5a50; --link: #2f6f6b; --accent: #2f6f6b; --line: #e4dcc9; --error: #b32942; --star: #b7791f;
+    .frame { --card: #fffdf8; --fg: #2a2823; --muted: #5e5a50; --link: #2f6f6b; --accent: #2f6f6b; --line: #e4dcc9; --error: #b32942; --star: #b7791f; --thin: #b34a00;
       position: fixed; top: 16px; right: 16px; z-index: 2147483647; box-sizing: border-box; width: 300px; max-width: calc(100vw - 32px);
       padding: 12px; border-radius: 10px; font: 14px/1.4 system-ui, sans-serif; background: var(--card); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 4px 16px #0004; display: flex; gap: 10px; }
-    @media (prefers-color-scheme: dark) { .frame { --card: #272726; --fg: #e8e8e6; --muted: #a8a8a4; --link: #3acb89; --accent: #3acb89; --line: #3a3a38; --error: #ff8a80; --star: #f2b84b; } }
+    @media (prefers-color-scheme: dark) { .frame { --card: #272726; --fg: #e8e8e6; --muted: #a8a8a4; --link: #3acb89; --accent: #3acb89; --line: #3a3a38; --error: #ff8a80; --star: #f2b84b; --thin: #f08a3c; } }
     img.cover { width: 64px; height: 96px; object-fit: cover; border-radius: 4px; flex: none; }
     .body { min-width: 0; flex: 1; } .title { font-weight: 600; } .meta { opacity: .8; }
     .links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 20px; }
@@ -27,6 +27,12 @@
     .rating svg { flex: none; width: 18px; height: 18px; fill: var(--star); }
     .rating strong { font-size: 26px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
     .rating .count { align-self: flex-end; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .rating .count.thin { color: var(--thin); }
+    .rating .warning { align-self: flex-end; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--thin); font-size: 15px; line-height: 1; cursor: pointer; }
+    .popover { position: fixed; inset: auto; margin: 0; max-width: 200px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--thin); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 13px; }
+    .original { margin-top: 12px; } .original-button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 6px; font: inherit; color: var(--fg); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+    .tear { margin: 4px -12px 8px; border-top: 2px dotted var(--line); } .sub .title { font-size: 13px; } .sub .rating strong { font-size: 20px; }
+    .spinner.small { width: 14px; height: 14px; border-width: 2px; }
     .none { padding: 8px 12px; }
     .wait { align-items: center; padding: 8px 12px; }
     .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: var(--accent); border-radius: 50%; animation: turn .8s linear infinite; }
@@ -113,18 +119,34 @@
   const body = box('div', null, 'body');
   body.append(box('div', card.title, 'title'));
   if (card.author) body.append(box('div', card.author.name, 'meta'));
-  if (card.rating) { // like the app: gold star, big number, small count
+  const ratingBox = (r) => { // like the app: gold star, big number, small count (orange, with a warning popover, when thin)
     const rating = box('div', null, 'rating');
-    rating.title = card.rating.title;
+    rating.title = r.title;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', 'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z');
     svg.append(path);
-    rating.append(svg, box('strong', card.rating.value), box('span', `(${card.rating.count})`, 'count'));
-    body.append(rating);
-  }
+    rating.append(svg, box('strong', r.value), box('span', `(${r.count})`, r.thin ? 'count thin' : 'count'));
+    if (r.thin) {
+      const warning = box('button', '⚠\uFE0E', 'warning');
+      warning.type = 'button';
+      warning.setAttribute('aria-label', `${t.thinLabel}: ${t.thin}`);
+      const popover = box('div', t.thin, 'popover');
+      popover.popover = 'auto';
+      warning.popoverTargetElement = popover;
+      popover.addEventListener('beforetoggle', (event) => {
+        if (event.newState !== 'open') return;
+        const at = warning.getBoundingClientRect();
+        popover.style.top = `${at.bottom + 6}px`;
+        popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 200 - 8))}px`;
+      });
+      rating.append(warning, popover);
+    }
+    return rating;
+  };
+  if (card.rating) body.append(ratingBox(card.rating));
   const links = box('div', null, 'links');
   for (const { name, url, title, icon } of card.links) {
     const link = box('a');
@@ -139,6 +161,36 @@
     links.append(link);
   }
   body.append(links);
+  { // a button, then a sub-card under a dotted seam (nothing is stored)
+    const slot = box('div', null, 'original');
+    const offer = (message) => {
+      const button = box('button', t.originalButton, 'original-button');
+      button.onclick = async () => {
+        button.disabled = true;
+        const ring = box('span', null, 'spinner small');
+        ring.role = 'status';
+        ring.setAttribute('aria-label', t.originalLooking);
+        button.replaceChildren(ring, t.originalLooking);
+        const answer = await chrome.runtime.sendMessage({ originalFor: card.isbn }).catch(() => null);
+        if (closed) return;
+        if (answer?.original) {
+          const { title, rating, url } = answer.original;
+          const sub = box('div', null, 'sub');
+          const link = box('a', 'Goodreads');
+          link.href = url; // already limited to goodreads.com/book/show by cleanOriginal
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          sub.append(box('div', t.originalLabel, 'meta'), box('div', title, 'title'), ...(rating ? [ratingBox(rating)] : []), link);
+          slot.replaceChildren(box('div', null, 'tear'), sub);
+        } else if (answer?.same) slot.replaceChildren(box('div', t.originalSame, 'meta'));
+        else offer(t.originalMissing); // not found or a failure: the button stays for a retry
+      };
+      slot.replaceChildren(...(message ? [box('div', message, 'meta')] : []), button);
+      if (message) button.focus();
+    };
+    offer();
+    body.append(slot);
+  }
   const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
   siteButton = site;
   site.onclick = async () => {
