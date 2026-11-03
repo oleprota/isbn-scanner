@@ -8,8 +8,7 @@ import { cleanText as clean } from './text.js';
 export const LOOKUP_URL = 'https://isbn-lookup.oleprota.workers.dev'; // the deployed worker (worker/README.md); '' turns the lookup off
 const TIMEOUT_MS = 10000; // Goodreads pages sometimes take 4 s or more, and the worker may ask twice (an empty 202)
 const SEARCH_TIMEOUT_MS = 12000; // the worker may ask Goodreads up to 4 times in a row (it drops words while nothing is found)
-const ORIGINAL_SHAPE = 3; // the same for the original answer, as `orig3` in worker/index.js (bump both together)
-const SHAPE = 6; // the answer's shape, same as `v6` in worker/index.js: it keeps the browser's HTTP cache from serving an answer of an older shape
+const SHAPE = 7; // the answer's shape, same as `v7` in worker/index.js: it keeps the browser's HTTP cache from serving an answer of an older shape
 const BUSY_WAIT_MS = 5000; // the worker answered 429 (too many lookups at once): the request waits and goes again
 const BUSY_RETRIES = 3;
 
@@ -38,7 +37,6 @@ export function cleanAnswer(data) {
 }
 
 // A rating count under this is too small to trust (the Card shows it orange, with a warning). The page and the extension share it.
-export const ORIGINAL_RETRY_SECONDS = 180; // how long the worker remembers that Goodreads did not answer the original (its cache time); the answer carries when it ends, the card counts down to it
 export const THIN_RATING_COUNT = 100;
 export const isThin = (rating) => Boolean(rating) && rating.count < THIN_RATING_COUNT;
 
@@ -46,14 +44,6 @@ function cleanRating(rating) {
   const value = Number(rating?.value);
   const count = Number(rating?.count);
   return value > 0 && value <= 5 && Number.isInteger(count) && count > 0 ? { value, count } : null;
-}
-
-// What the service said to `original=1`: { original: { title, author, url, rating, image } } (it needs a title and a Goodreads book page url), or null.
-export function cleanOriginal(data) {
-  const title = clean(data?.original?.title, 120);
-  const url = data?.original?.url;
-  if (!title || typeof url !== 'string' || !url.startsWith('https://www.goodreads.com/book/show/')) return null;
-  return { original: { title, author: clean(data.original.author, 100), sameWork: data.original.sameWork === true, rating: cleanRating(data.original.rating), image: typeof data.original.image === 'string' && data.original.image.startsWith('https://') ? data.original.image : '', url } };
 }
 
 // The candidates of a title search: up to 5 of { id, title, author, image }, or null when the answer is not a list of results.
@@ -77,15 +67,16 @@ export function cleanEdition(data) {
   return isValidIsbn(isbn) ? { isbn, found: cleanAnswer(data) } : null;
 }
 
-// Asks the service and returns what `parse` makes of the answer, or what `failure(outcome, body)` makes of a failure (null). Never throws. A 429 puts the
+// Asks the service and returns what `parse` makes of the answer, or null. Never throws. A 429 puts the
 // request in a queue of sorts: it waits and asks again (up to BUSY_RETRIES times), so the caller's
-// spinner runs until the final answer. `report(outcome, ms)` (optional, for the usage stats) is told how it ended:
-// found, invalid (an answer that is not usable), missing (404), busy (429 to the end), timeout, offline or error.
-async function ask(path, params, parse, { failure = () => null, url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report } = {}) {
+// spinner runs until the final answer. `report(outcome, ms, detail)` (optional, for the usage stats and the messages) is told how it ended:
+// found, invalid (an answer that is not usable), missing (404), busy (429 to the end), timeout, offline or error. `detail` is { reason } for missing (the worker's, see REASONS, or 'no-reason') and { status } for error.
+const REASONS = ['page-404', 'page-empty', 'page-refused', 'page-down', 'page-no-book']; // the worker's reasons for a 404 (worker/index.js)
+async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report } = {}) {
   if (!url) return null;
   const started = Date.now();
-  const done = (outcome, value = null) => {
-    report?.(outcome, Date.now() - started);
+  const done = (outcome, value = null, detail = {}) => {
+    report?.(outcome, Date.now() - started, detail);
     return value;
   };
   for (let attempt = 0; attempt <= BUSY_RETRIES; attempt++) {
@@ -93,38 +84,22 @@ async function ask(path, params, parse, { failure = () => null, url = LOOKUP_URL
       const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCache ? { ...params, nocache: 1 } : params)}`, { signal: AbortSignal.timeout(timeout) });
       if (response.status !== 429) {
         if (!response.ok) {
-          const missing = response.status === 404;
-          return done(missing ? 'missing' : 'error', failure(missing ? 'missing' : 'error', missing ? await response.json().catch(() => null) : null, response.status));
+          if (response.status !== 404) return done('error', null, { status: response.status });
+          const reason = (await response.json().catch(() => null))?.reason;
+          return done('missing', null, { reason: REASONS.includes(reason) ? reason : 'no-reason' });
         }
         const value = parse(await response.json());
-        return done(value ? 'found' : 'invalid', value ?? failure('invalid'));
+        return done(value ? 'found' : 'invalid', value);
       }
     } catch (error) {
-      const outcome = error?.name === 'TimeoutError' ? 'timeout' : error instanceof TypeError ? 'offline' : 'error';
-      return done(outcome, failure(outcome));
+      return done(error?.name === 'TimeoutError' ? 'timeout' : error instanceof TypeError ? 'offline' : 'error');
     }
     await wait(BUSY_WAIT_MS);
   }
-  return done('busy', failure('busy'));
+  return done('busy');
 }
 
 export const lookupBook = (isbn, options) => ask('lookup', { isbn, v: SHAPE }, cleanAnswer, options);
-// { original } or { problem, reason, retryAt?, title?, status? }. `reason` says exactly what happened (the app words it, strings.js):
-// the worker's (see originalAnswer in worker/index.js) or one of ours: offline, timeout, error (+ status), invalid, busy, no-reason.
-// `problem` is the coarse group the extension still uses: 'no-original' (Goodreads names none), 'not-found' (the search found no single
-// match), 'unavailable' (anything else: nobody answered). `retryAt` (epoch ms): when Goodreads may be asked again, for the reasons that carry `until`.
-const NO_ORIGINAL = ['page-404', 'page-no-book', 'page-no-author', 'page-no-original', 'page-too-long', 'page-same-title', 'page-no-work'];
-const NOT_FOUND = ['search-empty', 'search-other-author', 'search-no-rating', 'search-no-work', 'search-ambiguous'];
-const WAIT = ['page-empty', 'page-refused', 'page-down', 'search-failed'];
-const originalProblem = (outcome, body, status) => {
-  if (outcome !== 'missing') return { problem: 'unavailable', reason: outcome === 'error' ? 'error' : outcome, ...(status && { status }) };
-  const reason = body?.reason;
-  if (NO_ORIGINAL.includes(reason)) return { problem: 'no-original', reason };
-  if (NOT_FOUND.includes(reason)) return { problem: 'not-found', reason, ...(typeof body.title === 'string' && { title: clean(body.title, 120) }) };
-  if (WAIT.includes(reason)) return { problem: 'unavailable', reason, ...(Number.isFinite(body.until) && { retryAt: body.until }) };
-  return { problem: 'not-found', reason: 'no-reason' };
-};
-export const lookupOriginal = (isbn, options) => ask('lookup', { isbn, original: 1, v: ORIGINAL_SHAPE }, cleanOriginal, { failure: originalProblem, ...options });
 // null = the search failed; [] = it found nothing
 export const searchBooks = (query, options) => ask('search', { q: query }, cleanResults, { timeout: SEARCH_TIMEOUT_MS, ...options });
 export const editionOfBook = (id, options) => ask('book', { id }, cleanEdition, options);

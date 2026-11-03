@@ -1,7 +1,7 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
 import { pickIsbn } from './pickIsbn.js';
-import { ORIGINAL_RETRY_SECONDS, THIN_RATING_COUNT, isThin, lookupBook, lookupOriginal } from './shared/lookup.js';
+import { THIN_RATING_COUNT, isThin, lookupBook } from './shared/lookup.js';
 import { isbnLinks } from './shared/links.js';
 import { card as cardTexts, formatRating } from './shared/strings.js';
 import { frame, auto as autoTexts } from './texts.js';
@@ -15,8 +15,7 @@ async function inject(tabId, url, auto) {
   const enabled = !!patterns && await chrome.permissions.contains({ origins: patterns });
   const target = { tabId };
   const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
-    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, originalButton: cardTexts.originalButton, originalLooking: cardTexts.originalLooking,
-    originalLabel: cardTexts.originalLabel, originalMissing: cardTexts.originalMissing, originalNone: cardTexts.originalNone, originalDown: cardTexts.originalDown(ORIGINAL_RETRY_SECONDS) };
+    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -86,7 +85,7 @@ chrome.storage.onChanged.addListener((changes) => {
   syncAutoStart();
 });
 
-// content.js sends what it read; the answer is { card } or { problem } (a key of frame.problems: what went wrong).
+// content.js sends what it read; the answer is { card } or { problem, message? } (a key of frame.problems, or the lookup's own message: what went wrong).
 chrome.runtime.onMessage.addListener((page, sender, respond) => {
   if (sender.id !== chrome.runtime.id) return;
   if (page.auto) { // a tab opened before the switch went off or the site was removed may still ask
@@ -99,17 +98,13 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     return true;
   }
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
-  if (page.originalFor) { // the card's "find the original" button: { original } | { problem }
-    lookupOriginal(page.originalFor).then((answer) => respond(answer?.original ? { original: { ...answer.original, rating: shapeRating(answer.original.rating) } } : answer));
-    return true;
-  }
   (async () => {
     const isbn = pickIsbn(page);
     if (!isbn) return respond({ problem: 'noIsbn' });
     chrome.tabs.sendMessage(sender.tab.id, { searching: true }).catch(() => {}); // ISBN found: now the Goodreads lookup
-    let outcome;
-    const details = await lookupBook(isbn, { report: (result) => { outcome = result; } });
-    if (!details) return respond({ problem: outcome });
+    let why;
+    const details = await lookupBook(isbn, { report: (outcome, ms, detail) => { why = cardTexts.lookupWhy({ outcome, ...detail }); } });
+    if (!details) return respond({ problem: 'lookup', message: why });
     const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
     respond({ card: { ...details, isbn, links, rating: shapeRating(details.rating) } });
   })();

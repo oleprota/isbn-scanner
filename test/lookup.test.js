@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { THIN_RATING_COUNT, cleanAnswer, editionOfBook, isThin, lookupBook, lookupOriginal, searchBooks, setNoCache } from '../src/lookup.js';
+import { card } from '../src/strings.js';
+import { THIN_RATING_COUNT, cleanAnswer, editionOfBook, isThin, lookupBook, searchBooks, setNoCache } from '../src/lookup.js';
 
 const URL_ = 'https://lookup.example';
 const answer = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
@@ -26,7 +27,7 @@ test('returns the cleaned answer and asks for the ISBN', async () => {
     fetchFn: async (url) => { requested = url; return answer(full)(); },
   });
   assert.deepEqual(found, { ...full, title: 'Шлях королів' });
-  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=6`);
+  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=7`);
 });
 
 test('an answer with only a title is fine; missing parts are empty', async () => {
@@ -88,6 +89,27 @@ test('gives up after the timeout', async () => {
   assert.equal(await lookupBook('1', { url: URL_, fetchFn: slow, timeout: 20 }), null);
 });
 
+test('report also tells why: the worker\'s reason for a 404, the status of an error', async () => {
+  const detail = async (fetchFn) => {
+    let seen;
+    await lookupBook('9786171299412', { url: URL_, fetchFn, wait: async () => {}, report: (result, ms, d) => { seen = d; } });
+    return seen;
+  };
+  assert.deepEqual(await detail(async () => new Response(JSON.stringify({ reason: 'page-empty' }), { status: 404 })), { reason: 'page-empty' });
+  assert.deepEqual(await detail(async () => new Response(JSON.stringify({ reason: 'made-up' }), { status: 404 })), { reason: 'no-reason' });
+  assert.deepEqual(await detail(async () => new Response('{}', { status: 404 })), { reason: 'no-reason' });
+  assert.deepEqual(await detail(async () => new Response('{}', { status: 502 })), { status: 502 });
+});
+
+test('lookupWhy words every outcome and reason, the same for the page and the extension', () => {
+  assert.match(card.lookupWhy({ outcome: 'error', status: 502 }), /502/);
+  assert.equal(card.lookupWhy({ outcome: 'missing', reason: 'page-404' }), 'Goodreads не знає цього ISBN');
+  for (const outcome of ['offline', 'timeout', 'invalid', 'busy']) assert.ok(card.lookupWhy({ outcome }));
+  const texts = ['page-404', 'page-empty', 'page-refused', 'page-down', 'page-no-book', 'no-reason'].map((reason) => card.lookupWhy({ outcome: 'missing', reason }));
+  assert.equal(new Set(texts).size, texts.length); // each reason has its own words
+  assert.equal(card.lookupWhy(), card.lookupWhy({ outcome: 'missing', reason: 'no-reason' }));
+});
+
 test('report tells how a request ended', async () => {
   const outcome = async (fetchFn, parse = lookupBook) => {
     const seen = [];
@@ -120,28 +142,4 @@ test('a rating is thin under THIN_RATING_COUNT, not at it', () => {
   assert.equal(isThin({ value: 4, count: 100 }), false);
   assert.equal(isThin({ value: 4, count: 101 }), false);
   assert.equal(isThin(null), false);
-});
-
-test('lookupOriginal asks for the original and checks what comes back', async () => {
-  let requested;
-  const ask = (body, status) => lookupOriginal('9786171299412', { url: URL_, fetchFn: async (url) => { requested = url; return answer(body, status)(); } });
-  const original = { title: ' Way ', author: 'A', rating: { value: 4.6, count: 90 }, url: 'https://www.goodreads.com/book/show/77' };
-  assert.deepEqual(await ask({ original }), { original: { ...original, title: 'Way', image: '', sameWork: false } });
-  assert.equal((await ask({ original: { ...original, image: 'https://x/c.jpg' } })).original.image, 'https://x/c.jpg');
-  assert.equal((await ask({ original: { ...original, image: 'http://x/c.jpg' } })).original.image, '');
-  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&original=1&v=3`);
-  assert.equal((await ask({ original: { ...original, rating: { value: 9, count: 1 } } })).original.rating, null);
-  assert.deepEqual(await ask({ original: { ...original, url: 'javascript:1' } }), { problem: 'unavailable', reason: 'invalid' });
-  for (const bad of [{}, { original: { title: 'x' } }, { original: null }]) assert.equal((await ask(bad)).reason, 'invalid');
-  assert.deepEqual(await ask({}, 404), { problem: 'not-found', reason: 'no-reason' });
-  assert.deepEqual(await ask({ reason: 'page-no-original' }, 404), { problem: 'no-original', reason: 'page-no-original' });
-  assert.deepEqual(await ask({ reason: 'search-empty', title: 'Way' }, 404), { problem: 'not-found', reason: 'search-empty', title: 'Way' });
-  assert.deepEqual(await ask({ reason: 'search-ambiguous' }, 404), { problem: 'not-found', reason: 'search-ambiguous' });
-  assert.deepEqual(await ask({ reason: 'page-empty', until: 1700000000000 }, 404), { problem: 'unavailable', reason: 'page-empty', retryAt: 1700000000000 });
-  assert.deepEqual(await ask({ reason: 'page-refused', until: 'soon' }, 404), { problem: 'unavailable', reason: 'page-refused' });
-  assert.deepEqual(await ask({ reason: 'made-up' }, 404), { problem: 'not-found', reason: 'no-reason' });
-  assert.deepEqual(await ask({}, 500), { problem: 'unavailable', reason: 'error', status: 500 });
-  const failing = (fetchFn) => lookupOriginal('9786171299412', { url: URL_, fetchFn });
-  assert.equal((await failing(async () => { throw new TypeError('x'); })).reason, 'offline');
-  assert.equal((await failing(async () => { throw Object.assign(new Error('x'), { name: 'TimeoutError' }); })).reason, 'timeout');
 });

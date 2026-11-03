@@ -68,46 +68,24 @@ export const card = {
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
   thinTitle: (threshold) => `Менше ${threshold} оцінок — рейтинг ненадійний`, // the warning icon's popover and tooltip
   thinLabel: 'Попередження про рейтинг',
-  originalButton: 'Знайти оригінал',
-  originalLooking: 'Шукаю оригінал…',
-  originalLabel: 'Оригінал',
-  originalMissing: 'Оригінал не знайдено',
-  // What exactly happened with the original search, by the reason the lookup gives (lookupOriginal in lookup.js).
-  // "Наш пошук" is our lookup service (worker/); a format hint is where Goodreads may have changed its page.
-  originalWhy: ({ reason, title, status }) => {
+  // Why a lookup found nothing, by what the lookup reported (`outcome`, and `reason` or `status` from its detail; see ask in lookup.js).
+  // "Наш пошук" is our lookup service (worker/). The extension shows it; the page will, in the same words.
+  lookupWhy: ({ outcome, reason, status } = {}) => {
     const format = 'Можливо, Goodreads змінив формат сторінки';
     const why = {
       offline: 'Не вдалося зв’язатися з нашим пошуком. Перевірте інтернет',
       timeout: 'Наш пошук не відповів вчасно',
       error: `Наш пошук повернув помилку${status ? ` ${status}` : ''}`,
       invalid: 'Наш пошук надіслав незрозумілу відповідь',
-      'no-reason': 'Наш пошук не пояснив, чому оригіналу немає',
       busy: 'Забагато запитів. Спробуйте за хвилину',
+      'no-reason': 'Наш пошук не пояснив, чому книги немає',
       'page-404': 'Goodreads не знає цього ISBN',
       'page-empty': 'Goodreads віддає порожні сторінки',
       'page-refused': 'Goodreads відмовив у доступі',
       'page-down': 'Goodreads не відповідає',
       'page-no-book': `На сторінці Goodreads немає даних про книгу. ${format}`,
-      'page-no-author': `На сторінці Goodreads не вказано автора. ${format}`,
-      'page-no-original': 'На сторінці Goodreads немає назви оригіналу',
-      'page-too-long': 'Сторінка Goodreads задовга: назву оригіналу не знайдено',
-      'page-same-title': 'Це не переклад: назва оригіналу збігається з назвою книги',
-      'page-no-work': `На сторінці Goodreads немає ідентифікатора твору. ${format}`,
-      'search-failed': 'Пошук Goodreads не відповів',
-      'search-empty': `Goodreads не знайшов «${title}»`,
-      'search-other-author': `Є «${title}», але не цього автора`,
-      'search-no-rating': 'Книга знайдена, але без оцінок на Goodreads',
-      'search-no-work': 'Знайдену книгу не можна звірити: немає ідентифікатора твору',
-      'search-ambiguous': 'Знайдено кілька різних книг: не обираю навмання',
     };
-    return why[reason] ?? card.originalMissing;
-  },
-  originalSameWork: 'Goodreads об’єднує переклад і оригінал',
-  originalWait: (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`, // the countdown on the button
-  originalNone: 'Goodreads не вказує оригінал цієї книги',
-  originalDown: (seconds) => {
-    const minutes = Math.ceil(seconds / 60); // rounded up: "try again in" must not be too early
-    return `Goodreads не відповідає. Спробуйте за ${minutes} ${plural(minutes, ['хвилину', 'хвилини', 'хвилин'])}`;
+    return why[outcome === 'missing' ? reason : outcome] ?? why['no-reason'];
   },
   seriesLabel: 'Серія',
   authorLabel: 'Автор',

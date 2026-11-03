@@ -9,8 +9,8 @@ import { createBookList } from './bookList.js';
 import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
-import { coverImage, factsBlock, originalCard, ratingBlock } from './details.js';
-import { LOOKUP_URL, editionOfBook, lookupBook, lookupOriginal, searchBooks, setNoCache } from './lookup.js';
+import { coverImage, factsBlock, ratingBlock } from './details.js';
+import { LOOKUP_URL, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
 import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
@@ -259,47 +259,14 @@ function renderBook(book, isbn) {
     if (found?.rating) heading.after(ratingBlock(found.rating));
     facts.replaceChildren(...[found && factsBlock(found)].filter(Boolean));
   };
-  // The original of a translation, on request: a button (whenever the lookup found the book), then a sub-card under a
-  // tear seam. The result lives in this card only: nothing is stored.
-  const original = el('div', null, 'original-slot');
-  let settled = false;
-  const note = (text) => el('p', text, 'original-note');
-  function offerOriginal(message, retryAt = 0) {
-    const button = el('button', str.card.originalButton, 'original-button');
-    button.type = 'button';
-    button.addEventListener('click', async () => {
-      button.disabled = true;
-      button.replaceChildren(spinner(str.card.originalLooking), str.card.originalLooking);
-      const answer = await lookupOriginal(isbn);
-      if (answer?.original) original.replaceChildren(el('div', null, 'tear'), originalCard(answer.original));
-      else return offerOriginal(str.card.originalWhy(answer ?? {}), answer?.retryAt); // every failure keeps the button; a countdown first when the service asked for one
-      settled = true;
-    });
-    original.replaceChildren(...[message && note(message), button].filter(Boolean));
-    // Goodreads did not answer and the service remembers it until `retryAt`: the button waits and counts down
-    const tick = () => {
-      const left = Math.ceil((retryAt - Date.now()) / 1000);
-      if (!button.isConnected || button.disabled === false && left <= 0) return; // the card moved on, or nothing to wait for
-      button.disabled = left > 0;
-      button.textContent = left > 0 ? `${str.card.originalButton} (${str.card.originalWait(left)})` : str.card.originalButton;
-      if (left > 0) setTimeout(tick, 1000);
-      else button.focus();
-    };
-    if (retryAt > Date.now()) tick();
-    else if (message) button.focus(); // a retry: the focus was on the button that has just been replaced
-  }
-  const setOriginal = (found) => {
-    if (!settled && found && !original.firstChild) offerOriginal();
-  };
   // the star sits at the right edge of the card, like the buttons at the end of the list rows
   head.append(body, markToggle.create(book, isbn));
   setDetails(titles.details(isbn));
   const links = el('div', null, 'link-row');
   links.append(...isbnLinks(isbn, titles.foundBy(isbn)).map((link) => linkButton(link, { big: true })));
-  card.append(head, facts, links, original);
-  setOriginal(titles.details(isbn));
+  card.append(head, facts, links);
   result.replaceChildren(card);
-  shown = { card, isbn, book, update, setDetails: (found) => { setDetails(found); setOriginal(found); }, setWaiting };
+  shown = { card, isbn, book, update, setDetails, setWaiting };
 }
 
 // Asks the lookup service for the book's name and cover, in the background: the card, the beep and

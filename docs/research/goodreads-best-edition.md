@@ -4,7 +4,7 @@ Explored 2026-11-03. Status: **parked**, nothing built. Backlog entry: "Rating a
 
 ## The question
 
-The card can show the Original of a translation (`worker/`, `originalAnswer`). Idea: instead, or as well, show the book's *most popular edition*, so the rating rests on more votes. On a Goodreads book page the "More editions" list seemed to start with that edition (checked by eye on 5 books by the user).
+The card could show the Original of a translation (built, then parked: branch `original-lookup`, `originalAnswer` in `worker/index.js`). Idea: instead, or as well, show the book's *most popular edition*, so the rating rests on more votes. On a Goodreads book page the "More editions" list seemed to start with that edition (checked by eye on 5 books by the user).
 
 ## Findings
 

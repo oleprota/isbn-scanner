@@ -30,9 +30,6 @@
     .rating .count.thin { color: var(--thin); }
     .rating .warning { align-self: flex-end; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--thin); font-size: 15px; line-height: 1; cursor: pointer; }
     .popover { position: fixed; inset: auto; margin: 0; max-width: 200px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--thin); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 13px; }
-    .original { margin-top: 12px; } .original-button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 6px; font: inherit; color: var(--fg); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
-    .tear { margin: 4px -12px 8px; border-top: 2px dotted var(--line); } .sub .title { font-size: 13px; } .sub .rating strong { font-size: 20px; }
-    .spinner.small { width: 14px; height: 14px; border-width: 2px; }
     .none { padding: 8px 12px; }
     .wait { align-items: center; padding: 8px 12px; }
     .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: var(--accent); border-radius: 50%; animation: turn .8s linear infinite; }
@@ -85,7 +82,7 @@
       .then((html) => new DOMParser().parseFromString(html, 'text/html'))
       .catch(() => new DOMParser().parseFromString('', 'text/html'));
   }
-  const { card, problem } = (await chrome.runtime.sendMessage({
+  const { card, problem, message } = (await chrome.runtime.sendMessage({
     jsonLd: read('script[type="application/ld+json"]', null, data),
     meta: [
       ...read('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content', data),
@@ -105,7 +102,7 @@
   frame.classList.remove('wait');
   if (!card) {
     frame.classList.add('none');
-    frame.append(box('span', t.problems[problem] ?? t.problems.error));
+    frame.append(box('span', message ?? t.problems[problem] ?? t.problems.error));
     setTimeout(close, 6000);
     return;
   }
@@ -161,36 +158,6 @@
     links.append(link);
   }
   body.append(links);
-  { // a button, then a sub-card under a dotted seam (nothing is stored)
-    const slot = box('div', null, 'original');
-    const offer = (message) => {
-      const button = box('button', t.originalButton, 'original-button');
-      button.onclick = async () => {
-        button.disabled = true;
-        const ring = box('span', null, 'spinner small');
-        ring.role = 'status';
-        ring.setAttribute('aria-label', t.originalLooking);
-        button.replaceChildren(ring, t.originalLooking);
-        const answer = await chrome.runtime.sendMessage({ originalFor: card.isbn }).catch(() => null);
-        if (closed) return;
-        if (answer?.original) {
-          const { title, rating, url } = answer.original;
-          const sub = box('div', null, 'sub');
-          const link = box('a', 'Goodreads');
-          link.href = url; // already limited to goodreads.com/book/show by cleanOriginal
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          sub.append(box('div', t.originalLabel, 'meta'), box('div', title, 'title'), ...(rating ? [ratingBox(rating)] : []), link);
-          slot.replaceChildren(box('div', null, 'tear'), sub);
-        } else if (answer?.problem === 'no-original') slot.replaceChildren(box('div', t.originalNone, 'meta')); // a final answer: no retry
-        else offer(answer?.problem === 'not-found' ? t.originalMissing : t.originalDown); // the button stays for a retry
-      };
-      slot.replaceChildren(...(message ? [box('div', message, 'meta')] : []), button);
-      if (message) button.focus();
-    };
-    offer();
-    body.append(slot);
-  }
   const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
   siteButton = site;
   site.onclick = async () => {

@@ -1,13 +1,11 @@
 // ISBN lookup service, for the app (a browser page can't read Goodreads: no CORS headers there):
-//   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image} or 404 {}
-//   GET /lookup?isbn=<isbn>&original=1 -> {original: {title, author, rating, image, sameWork, url}} | 404 {reason, ...} (see originalAnswer)
+//   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image} or 404 {reason}
 //   GET /search?q=<title>    -> {results: [{id, title, author, image}]} (up to 5)
-//   GET /book?id=<book id>   -> {isbn, title, series, author, rating, image} of that Goodreads edition, or 404 {}
+//   GET /book?id=<book id>   -> {isbn, title, series, author, rating, image} of that Goodreads edition, or 404 {reason}
 //   POST /event              -> 204; a batch of anonymous usage events, kept in D1 when it is set up (events.js)
 // Runs as a Cloudflare Worker, see README.md in this folder.
 import { isValidIsbn, normalizeIsbn } from '../src/isbn.js';
-import { ORIGINAL_RETRY_SECONDS } from '../src/lookup.js';
-import { originalOrWhy, parseBook, parseCandidates, parseEdition } from './goodreads.js';
+import { parseBook, parseCandidates, parseEdition } from './goodreads.js';
 import { MAX_BYTES as MAX_EVENT_BYTES, cleanBatch, pruneEvents, saveBatch } from './events.js';
 
 // the last one is the browser extension (extension/), whose ID the manifest's `key` pins
@@ -19,79 +17,59 @@ const UNSURE_SECONDS = 60; // anything else (an empty 202, a block, an error): a
 const QUERY_WORD_DROP_TRIES = 4;
 const RETRY_202_TRIES = 4;
 const RETRY_DELAY_MS = 1500;
-// the original is on request and can be slower: fewer, more spaced tries at Goodreads, and a failure is remembered longer
-const ORIGINAL_RETRY_202_TRIES = 2;
-const ORIGINAL_RETRY_DELAY_MS = 2000;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 400_000; // the JSON-LD block is near the top of a ~1 MB page
-const MAX_BYTES_DEEP = 800_000; // the original title (embedded state) is at ~70% of it
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-// Reads the page only until the JSON-LD block is complete; `deep` goes on until the original title (embedded state, much
-// later in the page) is found, or MAX_BYTES_DEEP. Each chunk is scanned alone plus a short carry-over, so the cost stays linear in the page size.
-const ORIGINAL_TITLE = /"originalTitle":"(?:[^"\\]|\\.)*"/;
-const CARRY = 2000; // enough to hold the marker, or a title cut by a chunk edge (200 characters as \uXXXX escapes are 1200)
-async function readHead(response, deep = false) {
+// Reads the page only until the JSON-LD block is complete, then drops the rest.
+async function readHead(response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const parts = [];
+  let html = '';
   let bytes = 0;
-  let phase = 0; // 0: looking for the JSON-LD marker, 1: for the end of its block, 2: for the original title
-  let carry = '';
-  let cut = true; // stays true when the byte limit ended the read: the rest of the page was not seen
-  while (bytes < (deep ? MAX_BYTES_DEEP : MAX_BYTES)) {
+  while (bytes < MAX_BYTES) {
     const { done, value } = await reader.read();
-    if (done) { cut = false; break; }
+    if (done) break;
     bytes += value.length;
-    const text = decoder.decode(value, { stream: true });
-    parts.push(text);
-    let window = carry + text;
-    if (phase === 0 && window.includes('application/ld+json')) {
-      phase = 1;
-      window = window.slice(window.indexOf('application/ld+json'));
-    }
-    if (phase === 1 && window.includes('</script>')) {
-      phase = 2;
-      if (!deep) { cut = false; break; }
-      window = window.slice(window.indexOf('</script>'));
-    }
-    if (phase === 2 && ORIGINAL_TITLE.test(window)) { cut = false; break; }
-    carry = window.slice(-CARRY);
+    html += decoder.decode(value, { stream: true });
+    const marker = html.indexOf('application/ld+json');
+    if (marker !== -1 && html.indexOf('</script>', marker) !== -1) break;
   }
   reader.cancel().catch(() => {});
-  return { html: parts.join(''), cut };
+  return html;
 }
 
 // Goodreads sometimes answers an empty 202 for a page it has not built yet and serves the full page
 // a moment later, so a 202 is asked again, up to RETRY_202_TRIES times in all, RETRY_DELAY_MS apart. Returns { found } (what `parse` made of the page) or
-// { miss, certain, why }: `certain` only when Goodreads answered 404, so that a hiccup is never remembered as "no such book".
-async function fromGoodreads(pageUrl, parse, fetchFn, wait, deep = false) {
+// { miss, certain, why }: `certain` only when Goodreads answered 404, so that a hiccup is never remembered as "no such book". `why` is the reason the
+// app words (src/strings.js): page-404, page-empty (an empty 202), page-refused (403/429), page-down (timeout, network, other status), page-no-book (a page without book data).
+async function fromGoodreads(pageUrl, parse, fetchFn, wait) {
   let miss = 'no answer';
-  let why;
-  const tries = deep ? ORIGINAL_RETRY_202_TRIES : RETRY_202_TRIES;
-  for (let attempt = 0; attempt < tries; attempt++) {
+  let why = 'page-down';
+  for (let attempt = 0; attempt < RETRY_202_TRIES; attempt++) {
     try {
       const response = await fetchFn(pageUrl, {
         headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
         redirect: 'follow',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
-      if (response.status === 404) return { miss: 'status 404', certain: true };
+      if (response.status === 404) return { miss: 'status 404', certain: true, why: 'page-404' };
       miss = `status ${response.status}`;
+      why = response.status === 202 ? 'page-empty' : response.status === 403 || response.status === 429 ? 'page-refused' : 'page-down';
       if (response.status === 200 && response.body) {
-        const { html, cut } = await readHead(response, deep);
-        const parsed = parse(html, cut); // a page that is no use may say why: { unusable: <reason> }
-        if (parsed && !parsed.unusable) return { found: parsed };
+        const found = parse(await readHead(response));
+        if (found) return { found };
         miss = 'no book data in page';
-        why = parsed?.unusable;
+        why = 'page-no-book';
       }
       if (response.status !== 202) break;
-      if (attempt === tries - 1) break; // no pause after the last try
+      if (attempt === RETRY_202_TRIES - 1) break; // no pause after the last try
     } catch {
       miss = 'timeout or network error';
+      why = 'page-down';
       break;
     }
-    await wait(deep ? ORIGINAL_RETRY_DELAY_MS : RETRY_DELAY_MS);
+    await wait(RETRY_DELAY_MS);
   }
   return { miss, certain: false, why };
 }
@@ -113,9 +91,9 @@ async function suggestions(query, fetchFn) {
 // word that matches nothing (an author spelled in a way Goodreads doesn't have) leaves no results at all.
 // So when the whole query finds nothing, the last word is dropped and it is asked again (the title comes
 // first, the author after it), down to one word, at most QUERY_WORD_DROP_TRIES times. Returns the candidates, [] or null (failure).
-async function searchGoodreads(query, fetchFn, maxTries = QUERY_WORD_DROP_TRIES) {
+async function searchGoodreads(query, fetchFn) {
   const words = query.split(' ');
-  for (let tries = 0; tries < maxTries && words.length > 0; tries++, words.pop()) {
+  for (let tries = 0; tries < QUERY_WORD_DROP_TRIES && words.length > 0; tries++, words.pop()) {
     const results = await suggestions(words.join(' '), fetchFn);
     if (!results || results.length) return results;
   }
@@ -164,18 +142,12 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
     if (url.pathname === '/lookup') {
       const isbn = normalizeIsbn(param('isbn'));
       if (!isValidIsbn(isbn)) return json({ error: 'invalid isbn' }, 400, 0, cors);
-      const page = `https://www.goodreads.com/book/isbn/${isbn}`;
-      if (url.searchParams.get('original') === '1') {
-        key = `orig3/${isbn}`; // orig3: 404s carry detailed reasons // orig2: the answer carries the cover
-        work = () => originalAnswer(page);
-      } else {
-        key = `v6/${isbn}`; // v6: the first author, as listed
-        work = () => pageAnswer(page, parseBook);
-      }
+      key = `v7/${isbn}`; // v7: 404s carry a reason // v6: the first author, as listed
+      work = () => pageAnswer(`https://www.goodreads.com/book/isbn/${isbn}`, parseBook);
     } else if (url.pathname === '/book') {
       const id = param('id');
       if (!/^\d{1,12}$/.test(id)) return json({ error: 'invalid id' }, 400, 0, cors);
-      key = `book2/${id}`; // book2: the whole answer with the ISBN, not the ISBN alone
+      key = `book3/${id}`; // book3: 404s carry a reason // book2: the whole answer with the ISBN, not the ISBN alone
       work = () => pageAnswer(`https://www.goodreads.com/book/show/${id}`, parseEdition);
     } else if (url.pathname === '/search') {
       const query = param('q').slice(0, 100);
@@ -183,52 +155,15 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
       key = `search1/${encodeURIComponent(query.toLowerCase())}`;
       work = async () => {
         const results = await searchGoodreads(query, fetchFn);
-        return results ? json({ results: results.map(({ id, title, author, image }) => ({ id, title, author, image })) }, 200, results.length ? SEARCH_SECONDS : UNSURE_SECONDS) : json({}, 502, UNSURE_SECONDS);
+        return results ? json({ results }, 200, results.length ? SEARCH_SECONDS : UNSURE_SECONDS) : json({}, 502, UNSURE_SECONDS);
       };
     } else return json({}, 404, 0, cors);
 
     async function pageAnswer(pageUrl, parse) {
-      const { found, miss, certain } = await fromGoodreads(pageUrl, parse, fetchFn, wait);
+      const { found, miss, certain, why } = await fromGoodreads(pageUrl, parse, fetchFn, wait);
       return found
         ? json(found, 200, FOUND_SECONDS)
-        : json({}, 404, certain ? MISSING_SECONDS : UNSURE_SECONDS, { 'x-miss-reason': miss }); // the reason is for curl, when debugging
-    }
-
-    // The original of a translation: the page's hint is searched by title and author. {original} for a hit whose author
-    // matches exactly (the translation's own work included), else 404 (a failure is remembered shortly).
-    // `until` (epoch ms) is when the remembered failure ends: the app counts down to it, from the cache too
-    const unavailable = (reason, extra) => json({ reason, until: Date.now() + ORIGINAL_RETRY_SECONDS * 1000 }, 404, ORIGINAL_RETRY_SECONDS, extra);
-    const final = (reason, extra = {}) => json({ reason, ...extra }, 404, MISSING_SECONDS);
-    // The original of a translation: the page's hint is searched by title and author (both Goodreads' own words, so one search,
-    // no word dropping). {original} for a hit whose author matches exactly, else 404 {reason}. The reasons (the app words them, src/strings.js):
-    //   page-404 page-empty page-refused page-down page-no-book page-no-author page-no-original page-too-long page-same-title page-no-work
-    //   search-failed search-empty search-other-author search-no-rating search-no-work search-ambiguous
-    // page-empty, page-refused, page-down and search-failed are remembered ORIGINAL_RETRY_SECONDS and carry `until`; the others for a day.
-    async function originalAnswer(pageUrl) {
-      const { found, miss, certain, why } = await fromGoodreads(pageUrl, (html, cut) => {
-        const result = originalOrWhy(html, cut);
-        return result.found ?? { unusable: result.why };
-      }, fetchFn, wait, true);
-      if (!found) {
-        if (certain) return final('page-404');
-        if (why) return final(why);
-        const status = /^status (\d+)$/.exec(miss)?.[1];
-        const reason = status === '202' ? 'page-empty' : status === '403' || status === '429' ? 'page-refused' : 'page-down';
-        return unavailable(reason, { 'x-miss-reason': miss });
-      }
-      if (!found.workId) return final('page-no-work'); // without the page's work id nothing can be compared
-      const results = await searchGoodreads(`${found.title} ${found.author}`, fetchFn, 1);
-      if (!results) return unavailable('search-failed');
-      if (!results.length) return final('search-empty', { title: found.title });
-      const byAuthor = results.filter((r) => r.author === found.author);
-      if (!byAuthor.length) return final('search-other-author', { title: found.title });
-      const hits = byAuthor.filter((r) => r.rating);
-      if (!hits.length) return final('search-no-rating');
-      const own = hits.find((r) => r.workId === found.workId); // the book's own work among the hits: shown as the original too, whatever else matched
-      if (!own && hits.some((r) => !r.workId)) return final('search-no-work');
-      if (!own && hits.some((r) => r.workId !== hits[0].workId)) return final('search-ambiguous');
-      const { id, title, author, rating, image } = own ?? hits[0];
-      return json({ original: { title, author, rating, image, sameWork: Boolean(own), url: `https://www.goodreads.com/book/show/${id}` } }, 200, FOUND_SECONDS);
+        : json({ reason: why }, 404, certain ? MISSING_SECONDS : UNSURE_SECONDS, { 'x-miss-reason': miss }); // `miss` is for curl, when debugging
     }
 
     // test-only bypass (ADR-0003): ?nocache=1 skips the edge cache, read and write
