@@ -1,6 +1,6 @@
 // ISBN lookup service, for the app (a browser page can't read Goodreads: no CORS headers there):
 //   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image} or 404 {}
-//   GET /lookup?isbn=<isbn>&original=1 -> {original: {title, author, rating, url}} | {same: true} | 404 {}
+//   GET /lookup?isbn=<isbn>&original=1 -> {original: {title, author, rating, image, url}} | 404 {reason: 'unavailable' | 'no-original' | 'not-found'}
 //   GET /search?q=<title>    -> {results: [{id, title, author, image}]} (up to 5)
 //   GET /book?id=<book id>   -> {isbn, title, series, author, rating, image} of that Goodreads edition, or 404 {}
 //   POST /event              -> 204; a batch of anonymous usage events, kept in D1 when it is set up (events.js)
@@ -157,7 +157,7 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
       if (!isValidIsbn(isbn)) return json({ error: 'invalid isbn' }, 400, 0, cors);
       const page = `https://www.goodreads.com/book/isbn/${isbn}`;
       if (url.searchParams.get('original') === '1') {
-        key = `orig1/${isbn}`;
+        key = `orig2/${isbn}`; // orig2: the answer carries the cover
         work = () => originalAnswer(page);
       } else {
         key = `v6/${isbn}`; // v6: the first author, as listed
@@ -186,18 +186,20 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
     }
 
     // The original of a translation: the page's hint is searched by title and author. {original} for a hit whose author
-    // matches exactly, {same: true} when it is the translation's own work, else 404 (a failure is remembered shortly).
+    // matches exactly (the translation's own work included), else 404 (a failure is remembered shortly).
     async function originalAnswer(pageUrl) {
-      const { found, miss } = await fromGoodreads(pageUrl, parseOriginal, fetchFn, wait, true);
-      if (!found) return json({}, 404, UNSURE_SECONDS, { 'x-miss-reason': miss });
-      if (!found.workId) return json({}, 404, MISSING_SECONDS); // without the page's work id nothing can be compared
+      const { found, miss, certain } = await fromGoodreads(pageUrl, parseOriginal, fetchFn, wait, true);
+      // the 404 says why: 'unavailable' (Goodreads did not answer or gave an empty page), 'no-original' (the page names none,
+      // or Goodreads has no such book), 'not-found' (the search found no single match)
+      if (!found) return miss === 'no book data in page' || certain ? json({ reason: 'no-original' }, 404, MISSING_SECONDS) : json({ reason: 'unavailable' }, 404, UNSURE_SECONDS, { 'x-miss-reason': miss });
+      if (!found.workId) return json({ reason: 'no-original' }, 404, MISSING_SECONDS); // without the page's work id nothing can be compared
       const results = await searchGoodreads(`${found.title} ${found.author}`, fetchFn);
-      if (!results) return json({}, 404, UNSURE_SECONDS);
+      if (!results) return json({ reason: 'unavailable' }, 404, UNSURE_SECONDS);
       const hits = results.filter((r) => r.author === found.author && r.rating);
-      if (!hits.length || !hits[0].workId || hits.some((r) => r.workId !== hits[0].workId)) return json({}, 404, MISSING_SECONDS); // none, or ambiguous
-      if (hits[0].workId === found.workId) return json({ same: true }, 200, FOUND_SECONDS);
-      const { id, title, author, rating } = hits[0];
-      return json({ original: { title, author, rating, url: `https://www.goodreads.com/book/show/${id}` } }, 200, FOUND_SECONDS);
+      const own = hits.find((r) => r.workId === found.workId); // the book's own work among the hits: shown as the original too, whatever else matched
+      if (!own && (!hits.length || !hits[0].workId || hits.some((r) => r.workId !== hits[0].workId))) return json({ reason: 'not-found' }, 404, MISSING_SECONDS); // none, or ambiguous
+      const { id, title, author, rating, image } = own ?? hits[0];
+      return json({ original: { title, author, rating, image, url: `https://www.goodreads.com/book/show/${id}` } }, 200, FOUND_SECONDS);
     }
 
     // test-only bypass (ADR-0003): ?nocache=1 skips the edge cache, read and write

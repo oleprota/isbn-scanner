@@ -182,8 +182,8 @@
           link.rel = 'noopener noreferrer';
           sub.append(box('div', t.originalLabel, 'meta'), box('div', title, 'title'), ...(rating ? [ratingBox(rating)] : []), link);
           slot.replaceChildren(box('div', null, 'tear'), sub);
-        } else if (answer?.same) slot.replaceChildren(box('div', t.originalSame, 'meta'));
-        else offer(t.originalMissing); // not found or a failure: the button stays for a retry
+        } else if (answer?.problem === 'no-original') slot.replaceChildren(box('div', t.originalNone, 'meta')); // a final answer: no retry
+        else offer(answer?.problem === 'not-found' ? t.originalMissing : t.originalDown); // the button stays for a retry
       };
       slot.replaceChildren(...(message ? [box('div', message, 'meta')] : []), button);
       if (message) button.focus();

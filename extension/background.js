@@ -16,7 +16,7 @@ async function inject(tabId, url, auto) {
   const target = { tabId };
   const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
     thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, originalButton: cardTexts.originalButton, originalLooking: cardTexts.originalLooking,
-    originalLabel: cardTexts.originalLabel, originalSame: cardTexts.originalSame, originalMissing: cardTexts.originalMissing };
+    originalLabel: cardTexts.originalLabel, originalMissing: cardTexts.originalMissing, originalNone: cardTexts.originalNone, originalDown: cardTexts.originalDown };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -99,7 +99,7 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     return true;
   }
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
-  if (page.originalFor) { // the card's "find the original" button: { same } | { original } | null
+  if (page.originalFor) { // the card's "find the original" button: { original } | { problem }
     lookupOriginal(page.originalFor).then((answer) => respond(answer?.original ? { original: { ...answer.original, rating: shapeRating(answer.original.rating) } } : answer));
     return true;
   }

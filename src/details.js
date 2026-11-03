@@ -1,6 +1,6 @@
 // The parts of a book card that come from the lookup: the rating (the accent of the card), and the
 // series and author with links to Goodreads. All text goes in via textContent.
-import { el } from './dom.js';
+import { el, linkButton } from './dom.js';
 import { card, formatRating } from './strings.js';
 import { goodreadsSearch } from './links.js';
 import { THIN_RATING_COUNT, isThin } from './lookup.js';
@@ -34,7 +34,7 @@ export function ratingBlock(rating) {
 
 // The warning beside a thin count: a button that opens a native popover (no layout shift: it floats in the top layer)
 // with the reason. Light dismiss (a tap outside) and Escape close it.
-function thinButton() {
+export function thinButton() {
   const text = card.thinTitle(THIN_RATING_COUNT);
   const button = el('button', '⚠\uFE0E', 'thin-warning');
   button.type = 'button';
@@ -53,14 +53,25 @@ function thinButton() {
   return wrap;
 }
 
-// "Оригінал", the name, the rating (same orange count and warning when thin) and a Goodreads link. No Ereadian link.
-export function originalCard({ title, rating, url }) {
+export function coverImage(src) {
+  const img = el('img', null, 'cover');
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer';
+  img.src = src;
+  img.addEventListener('error', () => img.remove());
+  return img;
+}
+
+// The cover, then "Оригінал", the name and the rating (same orange count and warning when thin), and a Goodreads button
+// at the right edge. No Ereadian link.
+export function originalCard({ title, rating, url, image }) {
   const box = el('div', null, 'original-card');
-  box.append(el('p', card.originalLabel, 'original-label'), el('p', title, 'original-title'));
-  if (rating) box.append(ratingBlock(rating));
-  const link = outsideLink(url, 'Goodreads');
-  link.title = card.linkTitle(title, 'Goodreads');
-  box.append(link);
+  const text = el('div', null, 'original-text');
+  text.append(el('p', card.originalLabel, 'original-label'), el('p', title, 'original-title'));
+  if (rating) text.append(ratingBlock(rating));
+  const link = linkButton({ name: 'Goodreads', url, icon: 'icons/goodreads.png', title: card.linkTitle(title, 'Goodreads') });
+  link.classList.add('original-link');
+  box.append(...(image ? [coverImage(image)] : []), text, link);
   return box;
 }
 

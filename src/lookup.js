@@ -46,14 +46,12 @@ function cleanRating(rating) {
   return value > 0 && value <= 5 && Number.isInteger(count) && count > 0 ? { value, count } : null;
 }
 
-// What the service said to `original=1`: { same: true } (the original shares its data with the book), or
-// { original: { title, author, url, rating } } (it needs a title and a Goodreads book page url), or null.
+// What the service said to `original=1`: { original: { title, author, url, rating, image } } (it needs a title and a Goodreads book page url), or null.
 export function cleanOriginal(data) {
-  if (data?.same === true) return { same: true };
   const title = clean(data?.original?.title, 120);
   const url = data?.original?.url;
   if (!title || typeof url !== 'string' || !url.startsWith('https://www.goodreads.com/book/show/')) return null;
-  return { original: { title, author: clean(data.original.author, 100), rating: cleanRating(data.original.rating), url } };
+  return { original: { title, author: clean(data.original.author, 100), rating: cleanRating(data.original.rating), image: typeof data.original.image === 'string' && data.original.image.startsWith('https://') ? data.original.image : '', url } };
 }
 
 // The candidates of a title search: up to 5 of { id, title, author, image }, or null when the answer is not a list of results.
@@ -77,11 +75,11 @@ export function cleanEdition(data) {
   return isValidIsbn(isbn) ? { isbn, found: cleanAnswer(data) } : null;
 }
 
-// Asks the service and returns what `parse` makes of the answer, or null. Never throws. A 429 puts the
+// Asks the service and returns what `parse` makes of the answer, or what `failure(outcome, body)` makes of a failure (null). Never throws. A 429 puts the
 // request in a queue of sorts: it waits and asks again (up to BUSY_RETRIES times), so the caller's
 // spinner runs until the final answer. `report(outcome, ms)` (optional, for the usage stats) is told how it ended:
 // found, invalid (an answer that is not usable), missing (404), busy (429 to the end), timeout, offline or error.
-async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report } = {}) {
+async function ask(path, params, parse, { failure = () => null, url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report } = {}) {
   if (!url) return null;
   const started = Date.now();
   const done = (outcome, value = null) => {
@@ -92,20 +90,27 @@ async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, tim
     try {
       const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCache ? { ...params, nocache: 1 } : params)}`, { signal: AbortSignal.timeout(timeout) });
       if (response.status !== 429) {
-        if (!response.ok) return done(response.status === 404 ? 'missing' : 'error');
+        if (!response.ok) {
+          const missing = response.status === 404;
+          return done(missing ? 'missing' : 'error', failure(missing ? 'missing' : 'error', missing ? await response.json().catch(() => null) : null));
+        }
         const value = parse(await response.json());
-        return done(value ? 'found' : 'invalid', value);
+        return done(value ? 'found' : 'invalid', value ?? failure('invalid'));
       }
     } catch (error) {
-      return done(error?.name === 'TimeoutError' ? 'timeout' : error instanceof TypeError ? 'offline' : 'error');
+      const outcome = error?.name === 'TimeoutError' ? 'timeout' : error instanceof TypeError ? 'offline' : 'error';
+      return done(outcome, failure(outcome));
     }
     await wait(BUSY_WAIT_MS);
   }
-  return done('busy');
+  return done('busy', failure('busy'));
 }
 
 export const lookupBook = (isbn, options) => ask('lookup', { isbn, v: SHAPE }, cleanAnswer, options);
-export const lookupOriginal = (isbn, options) => ask('lookup', { isbn, original: 1, v: SHAPE }, cleanOriginal, options);
+// { original } or { problem }: 'no-original' (Goodreads names none), 'not-found' (no single match), 'unavailable' (anything else:
+// Goodreads or the service did not answer).
+const originalProblem = (outcome, body) => ({ problem: outcome !== 'missing' ? 'unavailable' : ['no-original', 'unavailable'].includes(body?.reason) ? body.reason : 'not-found' });
+export const lookupOriginal = (isbn, options) => ask('lookup', { isbn, original: 1, v: SHAPE }, cleanOriginal, { failure: originalProblem, ...options });
 // null = the search failed; [] = it found nothing
 export const searchBooks = (query, options) => ask('search', { q: query }, cleanResults, { timeout: SEARCH_TIMEOUT_MS, ...options });
 export const editionOfBook = (id, options) => ask('book', { id }, cleanEdition, options);

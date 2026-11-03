@@ -9,7 +9,7 @@ import { createBookList } from './bookList.js';
 import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
-import { factsBlock, originalCard, ratingBlock } from './details.js';
+import { coverImage, factsBlock, originalCard, ratingBlock } from './details.js';
 import { LOOKUP_URL, editionOfBook, lookupBook, lookupOriginal, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
@@ -243,15 +243,6 @@ function titleHeading(book, isbn, waiting) {
 // The card on screen, so that a lookup answer can reach it: { card, isbn, book, update, setDetails, setWaiting }.
 let shown = null;
 
-function coverImage(src) {
-  const img = el('img', null, 'cover');
-  img.alt = '';
-  img.referrerPolicy = 'no-referrer';
-  img.src = src;
-  img.addEventListener('error', () => img.remove());
-  return img;
-}
-
 function renderBook(book, isbn) {
   const card = el('article', null, 'book');
   const head = el('div', null, 'book-head');
@@ -280,8 +271,8 @@ function renderBook(book, isbn) {
       button.replaceChildren(spinner(str.card.originalLooking), str.card.originalLooking);
       const answer = await lookupOriginal(isbn);
       if (answer?.original) original.replaceChildren(el('div', null, 'tear'), originalCard(answer.original));
-      else if (answer?.same) original.replaceChildren(note(str.card.originalSame));
-      else return offerOriginal(str.card.originalMissing); // not found or a failure: the button stays for a retry
+      else if (answer?.problem === 'no-original') original.replaceChildren(note(str.card.originalNone)); // a final answer: no retry
+      else return offerOriginal(answer?.problem === 'not-found' ? str.card.originalMissing : str.card.originalDown); // the button stays for a retry
       settled = true;
     });
     original.replaceChildren(...[message && note(message), button].filter(Boolean));

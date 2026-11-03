@@ -2,7 +2,7 @@ import { el, linkButton, spinner } from './dom.js';
 import { books, card, lists, search } from './strings.js';
 import { SORTS, sortBooks } from './sort.js';
 import { isbnLinks } from './links.js';
-import { THIN_RATING_COUNT } from './lookup.js';
+import { thinButton } from './details.js';
 
 // An icon-only button still needs a name for screen readers, and a tooltip for the mouse.
 export function iconButton(icon, label) {
@@ -51,11 +51,7 @@ function ratingTag(value, thin) {
   const star = el('span', '★', 'row-star');
   star.setAttribute('aria-hidden', 'true');
   tag.append(star, el('span', `${card.ratingLabel}: `, 'sr-only'), value.toFixed(2));
-  if (thin) { // only a tooltip here; the card has the popover
-    const warning = el('span', '⚠\uFE0E', 'row-thin');
-    warning.title = card.thinTitle(THIN_RATING_COUNT);
-    tag.append(warning, el('span', card.thinTitle(THIN_RATING_COUNT), 'sr-only'));
-  }
+  if (thin) tag.append(thinButton()); // the same button and popover as on the card
   return tag;
 }
 
