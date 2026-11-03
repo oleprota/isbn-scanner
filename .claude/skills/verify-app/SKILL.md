@@ -14,4 +14,4 @@ Run these skills one after another, each with the Skill tool, in one browser ses
 5. `verify-lookup`
 6. `verify-stats`
 
-End with one combined table (skill, checks passed / failed / not run).
+End with one combined report in the format of `common.md` (default: the single count line over all skills, then one line per partial/failed check prefixed with its skill; verbose table only if asked).
