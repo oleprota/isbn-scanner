@@ -7,7 +7,9 @@ Minimal web page: enter or scan (camera) an ISBN, or type a title, get a card wi
 - Test: `npm test` (Node's built-in `node:test`, no network; covers `worker/` too)
 - Lookup service: `worker/` (Cloudflare Worker, deploy steps in `worker/README.md`); its address goes in `LOOKUP_URL` in `src/lookup.js`, empty = lookup off
 - Tests and browser checks that need several ISBNs use `test/fixtures/isbns.json` (valid real ISBNs and invalid ones); add new ones there instead of inventing them
-- Verify UI changes in a real browser (needs the Playwright MCP from `.mcp.json`): the commit gate `.claude/hooks/verify-gate.sh` blocks `git commit` until the `/verify-*` skills for the changed app files have passed on that diff (each stamps itself), and until `node --check` and `npm test` are green; `/verify-app` lists and runs all of them. Report failed checks, do not fix them unasked; skip the gate only when the user says so (`VERIFY_SKIP=1` before the commit command)
+- Verify UI changes in a real browser (needs the Playwright MCP from `.mcp.json`) with the `/verify-*` skills; `/verify-app` lists and runs all of them. Report failed checks, do not fix them unasked.
+- Keep the matching `/verify-*` skill up to date whenever you change the app's logic or UI (new behaviour, a changed rule, a removed feature); skip it for fine-tuning of values (colours, sizes, timings, texts).
+- Before committing a sizeable chunk of work, remind the user which `/verify-*` skills cover it and recommend running them. Whether to run them is the user's call only: never run them, or hold a commit back, on your own.
 - Hook `.claude/hooks/check-edit.sh`: at the end of a turn in which `src/`/`test/` JS or `index.html` changed, `node --check` and `npm test` run automatically; only failed tests are reported back (exit code 2)
 
 Ideas that are not in the current work go to `BACKLOG.md`.

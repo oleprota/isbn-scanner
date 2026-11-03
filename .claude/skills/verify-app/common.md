@@ -22,4 +22,3 @@ Collect console errors for the whole run (`browser_console_messages`, `all: true
 ## Report
 End with one table: check, result (pass / fail / not run), notes, screenshot path. State plainly what could not run and why. Close the browser (`browser_close`), stop the server only if you started it, commit nothing.
 
-**Stamp.** When no check of your skill failed and every required check ran (the ones marked optional may be skipped), record the pass: `.claude/hooks/verify-gate.sh stamp <your-skill>` from the project root. The commit gate accepts a skill only with a stamp for the exact current diff of its files, so run it last, after any fix. A failed or unrun check gets no stamp: report it and leave the fixing to the user's say-so.

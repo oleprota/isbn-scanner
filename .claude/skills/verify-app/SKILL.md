@@ -14,4 +14,4 @@ Run these skills one after another, each with the Skill tool, in one browser ses
 5. `verify-lookup`
 6. `verify-stats`
 
-End with one combined table (skill, checks passed / failed / not run). The commit gate `.claude/hooks/verify-gate.sh` lists the skills a commit needs, from the files changed.
+End with one combined table (skill, checks passed / failed / not run).

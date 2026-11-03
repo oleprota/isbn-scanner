@@ -1,7 +1,7 @@
 #!/bin/bash
 # Stop hook (project scope): when src/*.js, test/*.js or index.html changed since HEAD, run node --check and the tests.
 # Exit 2 blocks the stop and sends stderr back to Claude. Quiet when the same diff already passed,
-# and never loops (stop_hook_active). The repo's commit gate runs the same checks again.
+# and never loops (stop_hook_active).
 input=$(cat)
 [ "$(printf '%s' "$input" | jq -r '.stop_hook_active // false')" = true ] && exit 0
 root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
