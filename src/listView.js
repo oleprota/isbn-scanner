@@ -1,6 +1,7 @@
 import { el, linkButton, spinner } from './dom.js';
 import { books, card, lists, search } from './strings.js';
 import { SORTS, sortBooks } from './sort.js';
+import { copyText } from './copyText.js';
 import { isbnLinks } from './links.js';
 import { thinButton } from './details.js';
 
@@ -165,7 +166,10 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
 
   copy.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(list.toText(ordered(list.list()), (isbn) => ({ author: details(isbn)?.author?.name, rating: details(isbn)?.rating, found: foundBy().get(isbn) })));
+      await navigator.clipboard.writeText(copyText(ordered(list.list()), (isbn) => {
+        const found = details(isbn);
+        return { author: found?.author?.name, rating: found?.rating, found: foundBy().get(isbn) };
+      }));
       notify(lists.copied(books(list.list().length)));
       onCopy(true);
     } catch {

@@ -38,52 +38,6 @@ test('has, remove and clear', () => {
   assert.deepEqual(marked.list(), []);
 });
 
-const ereadian = (q) => `https://ereadian.com/search?q=${q}`;
-const goodreads = (isbn) => `https://www.goodreads.com/book/isbn/${isbn}`;
-const bookText = (title, info = {}, isbn = '1') => createBookList(memoryStore()).toText([{ isbn, title }], () => info);
-
-test('toText writes a book as title, Ereadian link, Goodreads link, with an empty line between books', () => {
-  const marked = createBookList(memoryStore());
-  assert.equal(
-    marked.toText([{ isbn: '1', title: 'B' }, { isbn: '2', title: 'A' }]),
-    `B\n${ereadian(1)}\n${goodreads(1)}\n\nA\n${ereadian(2)}\n${goodreads(2)}`,
-  );
-});
-
-test('toText puts author, rating and count on the first line', () => {
-  const text = bookText('Matilda', { author: 'Roald Dahl', rating: { value: 4.4, count: 1234 } });
-  assert.equal(text.split('\n')[0], `Roald Dahl, Matilda ★ 4.40 (${new Intl.NumberFormat('uk-UA').format(1234)})`);
-});
-
-test('toText skips a missing author or rating', () => {
-  assert.equal(bookText('Matilda', { author: 'Roald Dahl' }).split('\n')[0], 'Roald Dahl, Matilda');
-  assert.equal(bookText('Matilda', { rating: { value: 4, count: 500 } }).split('\n')[0], 'Matilda ★ 4.00 (500)');
-  assert.equal(bookText('Matilda').split('\n')[0], 'Matilda');
-});
-
-test('toText marks a thin rating with a warning after the count', () => {
-  assert.equal(bookText('X', { rating: { value: 5, count: 3 } }).split('\n')[0], 'X ★ 5.00 (3) ⚠');
-});
-
-test('toText drops a closing period of the title but keeps ?, ! and an ellipsis', () => {
-  const first = (title) => bookText(title).split('\n')[0];
-  assert.equal(first('Dune.'), 'Dune');
-  assert.equal(first('Why?'), 'Why?');
-  assert.equal(first('Go!'), 'Go!');
-  assert.equal(first('Wait...'), 'Wait...');
-  assert.equal(first('Wait…'), 'Wait…');
-});
-
-test('toText links a book found by title to the searches, as the card does', () => {
-  const text = bookText('Dune', { found: { title: 'Dune', author: 'Frank Herbert' } });
-  assert.deepEqual(text.split('\n').slice(1), [ereadian('Dune'), 'https://www.goodreads.com/search?q=Dune%20Frank%20Herbert']);
-});
-
-test('entries saved by earlier versions (with authors) are still listed', () => {
-  const marked = createBookList(memoryStore([{ isbn: '1', title: 'Old', authors: ['A'], publishedDate: '1999' }]));
-  assert.equal(marked.toText().split('\n')[0], 'Old');
-});
-
 test('ignores malformed stored entries', () => {
   const marked = createBookList(memoryStore([null, { isbn: 1 }, { isbn: '1', title: 'Ok', authors: [] }]));
   assert.deepEqual(marked.list().map((b) => b.isbn), ['1']);

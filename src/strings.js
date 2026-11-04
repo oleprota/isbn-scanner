@@ -127,6 +127,8 @@ export const lists = {
   clearMarked: (booksText) => `Очистити «${lists.names.marked}» (${booksText})?`,
   copied: (booksText) => `Скопійовано ${booksText} до буфера.`,
   copyFailed: 'Не вдалося скопіювати.',
+  copyStar: '★', // in the copied text: before the rating
+  copyThin: '⚠', // in the copied text: after a thin rating's count
 };
 
 const groups = { page, theme, search, scanner, card, lists };
