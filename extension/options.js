@@ -1,6 +1,7 @@
 // Settings: the master switch (chrome.storage.sync) and the list of opted-in sites (= the granted site permissions).
 // background.js watches both and re-registers the auto-start script.
 import { options as t } from './texts.js';
+import { DEV_MS, readDev } from './devMode.js';
 import { hostPatterns, sitesFromOrigins } from './sites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -15,12 +16,18 @@ master.onchange = () => chrome.storage.sync.set({ autoMode: master.checked });
 
 $('developerText').textContent = t.developer;
 $('devCacheText').textContent = t.devCache;
-chrome.storage.local.get({ developer: false, noCache: false }).then((saved) => {
+readDev().then((saved) => {
   $('developer').checked = saved.developer;
   $('devCacheRow').hidden = !saved.developer;
   $('devCache').checked = saved.noCache;
 });
-$('developer').onchange = (event) => { chrome.storage.local.set({ developer: event.target.checked }); $('devCacheRow').hidden = !event.target.checked; };
+$('developer').onchange = (event) => {
+  const on = event.target.checked;
+  if (on) chrome.storage.local.set({ developerUntil: Date.now() + DEV_MS });
+  else chrome.storage.local.remove(['developerUntil', 'noCache']);
+  $('devCacheRow').hidden = !on;
+  if (!on) $('devCache').checked = false;
+};
 $('devCache').onchange = (event) => chrome.storage.local.set({ noCache: event.target.checked });
 
 async function showSites() {

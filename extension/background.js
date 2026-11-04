@@ -1,6 +1,7 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
 import { pickIsbn, candidates } from './pickIsbn.js';
+import { readDev } from './devMode.js';
 import { THIN_RATING_COUNT, isThin, lookupBook, setNoCache } from './shared/lookup.js';
 import { isbnLinks, goodreadsSearch } from './shared/links.js';
 import { card as cardTexts, formatRating } from './shared/strings.js';
@@ -101,7 +102,7 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
   (async () => {
     const isbn = pickIsbn(page);
     // Developer mode (options page; ADR-0003) adds a line of facts to the answer, and its "no cache" check skips the caches.
-    const { developer, noCache } = await chrome.storage.local.get({ developer: false, noCache: false });
+    const { developer, noCache } = await readDev();
     setNoCache(developer && noCache);
     const debug = (text) => (developer ? { debug: `dev: ${text}` } : {});
     if (!isbn) return respond({ problem: 'noIsbn', ...debug('no ISBN found') });
