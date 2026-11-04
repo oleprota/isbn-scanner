@@ -122,6 +122,7 @@ const listView = (name, list, own) => createListView({
   ratings: titles.ratings,
   thinRatings: titles.thinRatings,
   foundBy: titles.allFoundBy,
+  details: titles.details,
   sortMode: loadSort(browserStorage(), name),
   onSort: (mode) => {
     saveSort(browserStorage(), name, mode);

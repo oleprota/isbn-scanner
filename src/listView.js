@@ -62,12 +62,13 @@ function ratingTag(value, thin) {
 //   onChange(): called after Clear, so every list and star in the page is redrawn;
 //   ratings(): Map of isbn -> rating value (a book without one is not in it); sortMode, onSort(mode): the list's
 //   order (see src/sort.js) and what to do when the user picks another one;
+//   details(isbn): what the lookup found for a book ({ author, rating, ... }) or undefined (Copy writes the author and rating)
 //   foundBy(): Map of isbn -> { title, author } for the books found by a title search (their site links search for them, not the ISBN);
 //   isWaiting(isbn): true while the book's name is still being looked up (the row shows a spinner);
 //   onCopy(ok): the Copy button was used (for the usage stats); notify(text, isError): status line; elements: { section, count, items, empty, copy, clear }
 // The section (a <details>) opens by itself when the list stops being empty (on load, or at the
 // first book added, also while scanning); after that the user's open/closed choice is left alone.
-export function createListView({ list, confirmClear, rowButton, onOpen, onChange, isWaiting = () => false, ratings = () => new Map(), thinRatings = () => new Set(), foundBy = () => new Map(), sortMode = 'date', onSort = () => {}, onCopy = () => {}, notify, elements }) {
+export function createListView({ list, confirmClear, rowButton, onOpen, onChange, isWaiting = () => false, ratings = () => new Map(), thinRatings = () => new Set(), foundBy = () => new Map(), details = () => undefined, sortMode = 'date', onSort = () => {}, onCopy = () => {}, notify, elements }) {
   const { section, count, items, empty, copy, clear } = elements;
   let locked = false;
   let wasEmpty = true;
@@ -164,7 +165,7 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
 
   copy.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(list.toText(ordered(list.list())));
+      await navigator.clipboard.writeText(list.toText(ordered(list.list()), (isbn) => ({ author: details(isbn)?.author?.name, rating: details(isbn)?.rating, found: foundBy().get(isbn) })));
       notify(lists.copied(books(list.list().length)));
       onCopy(true);
     } catch {
