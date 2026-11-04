@@ -229,9 +229,24 @@ test('/search gives up after a few tries, and a failure stops the dropping', asy
   const { request } = setup((url) => { asked.push(url); return new Response('[]'); });
   const { results } = await (await request('/search?q=a%20b%20c%20d%20e%20f')).json();
   assert.deepEqual(results, []);
-  assert.equal(asked.length, 4);
+  assert.equal(asked.length, 3);
   const failing = [];
   const down = await setup((url) => { failing.push(url); return new Response('x', { status: 500 }); }).request('/search?q=a%20b%20c');
   assert.equal(down.status, 502);
   assert.equal(failing.length, 1); // not asked again with fewer words
+});
+
+test('each real Goodreads fetch leaves an upstream row, a cache hit a cache_hit row', async () => {
+  const handler = createHandler({ fetchFn: goodreads('', 403), cache: memoryCache(), wait: async () => {} });
+  const saved = [];
+  const env = { DB: { prepare: () => ({ bind: (...args) => args }), batch: async (rows) => saved.push(...rows) } };
+  const ctx = { waitUntil: (promise) => promise };
+  const handle = (query) => handler(new Request(`https://worker.test/lookup${query}`, { headers: { origin: ORIGIN } }), env, ctx);
+  await handle(`?isbn=${ISBN}`);
+  await handle(`?isbn=${ISBN}`); // answered from the cache
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(saved.map((row) => row[3]), ['upstream', 'cache_hit']);
+  assert.deepEqual([JSON.parse(saved[0][4]).kind, JSON.parse(saved[0][4]).result, JSON.parse(saved[1][4])], ['lookup', 'page-refused', { kind: 'lookup' }]);
+  await handler(new Request('https://worker.test/search?q=dune', { headers: { origin: ORIGIN } }), env, ctx);
+  assert.deepEqual([saved[2][3], JSON.parse(saved[2][4]).kind, JSON.parse(saved[2][4]).result, JSON.parse(saved[2][4]).tries], ['upstream', 'search', 'failed', 1]);
 });

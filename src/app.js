@@ -280,7 +280,7 @@ function requestMeta(isbn) {
   asked.add(isbn);
   pending.add(isbn);
   renderLists(); // the rows of this book show the spinner too (several lookups can run at once while scanning)
-  lookupBook(isbn, { report: (result, ms) => stats.track('lookup', { result, ms }) }).then((found) => {
+  lookupBook(isbn, { report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
     pending.delete(isbn);
     if (found) return applyMeta(isbn, found);
     if (shownCard(isbn)) shown.setWaiting(false);

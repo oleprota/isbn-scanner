@@ -7,7 +7,7 @@ export const EVENTS = {
   scan_stop: ['ms', 'found'],
   scan_fail: ['reason'],
   search: ['via', 'ok'],
-  lookup: ['result', 'ms'],
+  lookup: ['result', 'ms', 'reason'],
   title_search: ['n'],
   title_pick: ['isbn', 'details'],
   star: ['on'],

@@ -14,7 +14,7 @@ const FOUND_SECONDS = 7 * 24 * 3600;
 const MISSING_SECONDS = 24 * 3600; // Goodreads said 404: it really doesn't know the book
 const SEARCH_SECONDS = 24 * 3600; // a title search with results
 const UNSURE_SECONDS = 60; // anything else (an empty 202, a block, an error): ask again soon
-const QUERY_WORD_DROP_TRIES = 4;
+const QUERY_WORD_DROP_TRIES = 3;
 const RETRY_202_TRIES = 4;
 const RETRY_DELAY_MS = 1500;
 const FETCH_TIMEOUT_MS = 5000;
@@ -90,14 +90,16 @@ async function suggestions(query, fetchFn) {
 // Goodreads matches every word against the book's title and the names of all authors it lists, and one
 // word that matches nothing (an author spelled in a way Goodreads doesn't have) leaves no results at all.
 // So when the whole query finds nothing, the last word is dropped and it is asked again (the title comes
-// first, the author after it), down to one word, at most QUERY_WORD_DROP_TRIES times. Returns the candidates, [] or null (failure).
+// first, the author after it), down to one word, at most QUERY_WORD_DROP_TRIES times. Returns { results: the candidates, [] or null (failure), tries: how many times Goodreads was asked }.
 async function searchGoodreads(query, fetchFn) {
   const words = query.split(' ');
-  for (let tries = 0; tries < QUERY_WORD_DROP_TRIES && words.length > 0; tries++, words.pop()) {
+  let tries = 0;
+  for (; tries < QUERY_WORD_DROP_TRIES && words.length > 0; words.pop()) {
     const results = await suggestions(words.join(' '), fetchFn);
-    if (!results || results.length) return results;
+    tries++;
+    if (!results || results.length) return { results, tries };
   }
-  return [];
+  return { results: [], tries };
 }
 
 const json = (body, status, seconds, extra = {}) =>
@@ -139,28 +141,39 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
     // and the work that makes the answer
     let key;
     let work;
+    // Stats rows written by the worker itself (not in EVENTS, so a client can't forge them): `upstream` = one real Goodreads fetch, `cache_hit` = answered from the cache.
+    // `kind` is lookup, book or search. Nothing without a database. The nocache bypass is dev's own use.
+    const note = (name, data) => env.DB && ctx?.waitUntil(saveBatch(env.DB, { id: 'worker', dev: bypass ? 1 : 0, rows: [{ ts: Date.now(), name, data: JSON.stringify(data) }] }).catch(() => {}));
+    let kind;
     if (url.pathname === '/lookup') {
       const isbn = normalizeIsbn(param('isbn'));
       if (!isValidIsbn(isbn)) return json({ error: 'invalid isbn' }, 400, 0, cors);
+      kind = 'lookup';
       key = `v7/${isbn}`; // v7: 404s carry a reason // v6: the first author, as listed
       work = () => pageAnswer(`https://www.goodreads.com/book/isbn/${isbn}`, parseBook);
     } else if (url.pathname === '/book') {
       const id = param('id');
       if (!/^\d{1,12}$/.test(id)) return json({ error: 'invalid id' }, 400, 0, cors);
+      kind = 'book';
       key = `book3/${id}`; // book3: 404s carry a reason // book2: the whole answer with the ISBN, not the ISBN alone
       work = () => pageAnswer(`https://www.goodreads.com/book/show/${id}`, parseEdition);
     } else if (url.pathname === '/search') {
       const query = param('q').slice(0, 100);
       if (query.length < 2) return json({ error: 'query too short' }, 400, 0, cors);
+      kind = 'search';
       key = `search1/${encodeURIComponent(query.toLowerCase())}`;
       work = async () => {
-        const results = await searchGoodreads(query, fetchFn);
+        const started = Date.now();
+        const { results, tries } = await searchGoodreads(query, fetchFn);
+        note('upstream', { kind, result: !results ? 'failed' : results.length ? 'found' : 'empty', tries, ms: Date.now() - started });
         return results ? json({ results }, 200, results.length ? SEARCH_SECONDS : UNSURE_SECONDS) : json({}, 502, UNSURE_SECONDS);
       };
     } else return json({}, 404, 0, cors);
 
     async function pageAnswer(pageUrl, parse) {
+      const started = Date.now();
       const { found, miss, certain, why } = await fromGoodreads(pageUrl, parse, fetchFn, wait);
+      note('upstream', { kind, result: found ? 'found' : why, ms: Date.now() - started });
       return found
         ? json(found, 200, FOUND_SECONDS)
         : json({ reason: why }, 404, certain ? MISSING_SECONDS : UNSURE_SECONDS, { 'x-miss-reason': miss }); // `miss` is for curl, when debugging
@@ -170,7 +183,10 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
     const bypass = url.searchParams.get('nocache') === '1';
     const cacheKey = new Request(`https://lookup.invalid/${key}`);
     const cached = bypass ? null : await cache.match(cacheKey);
-    if (cached) return new Response(cached.body, { status: cached.status, headers: { ...Object.fromEntries(cached.headers), ...cors } });
+    if (cached) {
+      note('cache_hit', { kind });
+      return new Response(cached.body, { status: cached.status, headers: { ...Object.fromEntries(cached.headers), ...cors } });
+    }
 
     const limited = await env.LIMITER?.limit({ key: request.headers.get('cf-connecting-ip') ?? 'anonymous' });
     if (limited && !limited.success) return json({ error: 'slow down' }, 429, 0, cors);

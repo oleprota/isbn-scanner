@@ -24,6 +24,10 @@ Read it (every row has `dev`: 1 is the developer's own use, leave it out):
     npx wrangler d1 execute isbn-stats --remote --command "SELECT json_extract(data,'$.os') os, json_extract(data,'$.browser') browser, COUNT(DISTINCT id) users FROM events WHERE name='session' AND dev=0 GROUP BY 1,2"
     npx wrangler d1 execute isbn-stats --remote --command "SELECT json_extract(data,'$.result') result, COUNT(*) n, CAST(AVG(json_extract(data,'$.ms')) AS INT) avg_ms FROM events WHERE name='lookup' AND dev=0 GROUP BY 1"
 
+Is Goodreads blocking us? The worker writes rows with id `worker`: an `upstream` row per real Goodreads fetch and a `cache_hit` row per answer from the cache, each with `kind` (`lookup` = book page by ISBN, `book` = edition picked from a title search, `search` = title search, one row, whose `tries` field says how many Goodreads requests it cost, at most 3). For an `upstream` row `result` is `found` or the reason it failed (`page-refused` = 403/429, `page-empty` = empty 202, `page-down`, `page-404`, `page-no-book`; a search: `found`, `empty`, `failed`). The app's `lookup` rows carry the same `reason` for a missing book. Threshold for starting the backlog work "Goodreads blocking": on a day with 200+ real fetches, over 5% `page-refused` or `page-empty`.
+
+    npx wrangler d1 execute isbn-stats --remote --command "SELECT date(ts/1000,'unixepoch') day, name, json_extract(data,'$.kind') kind, json_extract(data,'$.result') result, COUNT(*) n FROM events WHERE name IN ('upstream','cache_hit') AND dev=0 GROUP BY 1,2,3,4 ORDER BY 1 DESC"
+
 ## Deploy (once)
 
 1. Make a free Cloudflare account (no card needed): https://dash.cloudflare.com/sign-up
