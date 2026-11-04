@@ -82,7 +82,7 @@
       .then((html) => new DOMParser().parseFromString(html, 'text/html'))
       .catch(() => new DOMParser().parseFromString('', 'text/html'));
   }
-  const { card, problem, message } = (await chrome.runtime.sendMessage({
+  const { card, problem, message, debug } = (await chrome.runtime.sendMessage({
     jsonLd: read('script[type="application/ld+json"]', null, data),
     meta: [
       ...read('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content', data),
@@ -103,6 +103,7 @@
   if (!card) {
     frame.classList.add('none');
     frame.append(box('span', message ?? t.problems[problem] ?? t.problems.error));
+    if (debug) { frame.append(box('small', debug)); return; } // developer mode: stays until closed
     setTimeout(close, 6000);
     return;
   }
@@ -115,7 +116,19 @@
   }
   const body = box('div', null, 'body');
   body.append(box('div', card.title, 'title'));
-  if (card.author) body.append(box('div', card.author.name, 'meta'));
+  const fact = (label, name, url, suffix) => { // like the app's series and author lines: the name links to Goodreads
+    const line = box('div', null, 'meta');
+    line.append(`${label}: `);
+    if (url) { // urls come from our own service, checked in cleanAnswer, or built in background.js
+      const a = box('a', name);
+      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      line.append(a);
+    } else line.append(name);
+    if (suffix) line.append(` #${suffix}`);
+    body.append(line);
+  };
+  if (card.series) fact(t.seriesLabel, card.series.name, card.seriesUrl, card.series.number);
+  if (card.author) fact(t.authorLabel, card.author.name, card.author.url);
   const ratingBox = (r) => { // like the app: gold star, big number, small count (orange, with a warning popover, when thin)
     const rating = box('div', null, 'rating');
     rating.title = r.title;
@@ -158,6 +171,7 @@
     links.append(link);
   }
   body.append(links);
+  if (debug) body.append(box('small', debug, 'meta'));
   const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
   siteButton = site;
   site.onclick = async () => {

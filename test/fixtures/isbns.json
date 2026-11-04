@@ -68,7 +68,10 @@
       "isbn": "9789650100650",
       "title": "Hamleṭ nesikh Denmarḳ",
       "note": "Hebrew edition"
-    }
+    },
+    { "isbn": "9786178401979", "title": "Нерухомість", "note": "paperback; same book as the next two (laboratory.ua lists all three)" },
+    { "isbn": "9786178401986", "title": "Нерухомість", "note": "e-book" },
+    { "isbn": "9786178620028", "title": "Нерухомість", "note": "audiobook" }
   ],
   "notFoundInOpenLibrary": [
     {

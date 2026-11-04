@@ -66,3 +66,16 @@ test('an ISBN found in several sources beats a related book that comes first', (
 test('a repeat within one source is not a second vote', () => {
   assert.equal(pick({ text: `ISBN: ${B} ISBN: ${A} ISBN: ${A}` }), B);
 });
+
+test('among ISBNs of one list, the paper edition wins; words may come before or after the number', () => {
+  const [paper, ebook, audio] = isbns.found.slice(-3).map((e) => e.isbn);
+  const hyphenated = `${audio.slice(0, 3)}-${audio.slice(3, 6)}-${audio.slice(6, 10)}-${audio.slice(10, 12)}-${audio.slice(12)}`;
+  assert.equal(pick({ text: `ISBN ${ebook} (електронне видання), ${hyphenated} (аудіоформат), ${paper} (паперове видання)` }), paper);
+  assert.equal(pick({ text: `Ebook ISBN: ${ebook}; Paperback ISBN: ${paper}` }), paper);
+  assert.equal(pick({ text: `ISBN ${ebook} (електронне видання)` }), ebook); // a format word only ranks
+  assert.equal(pick({ text: `ISBN ${ebook}, ${paper}` }), ebook); // no words: the first stays
+  assert.equal(pick({ jsonLd: [JSON.stringify({ isbn: A })], meta: [A], title: [`Book ${A}`], text: `ISBN ${ebook}, ${paper} (paperback)` }), A); // several sources still beat format words
+  assert.equal(pick({ jsonLd: [JSON.stringify({ isbn: ebook })], text: `ISBN ${ebook} (електронне видання), ${paper} (паперове видання)` }), paper); // laboratory.ua: structured data holds the e-book
+  const indent = ' '.repeat(300);
+  assert.equal(pick({ text: `ISBN${indent}${ebook} (електронне видання),${indent}${paper} (паперове видання)${indent}` }), paper); // markup whitespace
+});

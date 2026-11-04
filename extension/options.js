@@ -13,6 +13,16 @@ const master = $('master');
 chrome.storage.sync.get({ autoMode: true }).then(({ autoMode }) => { master.checked = autoMode; });
 master.onchange = () => chrome.storage.sync.set({ autoMode: master.checked });
 
+$('developerText').textContent = t.developer;
+$('devCacheText').textContent = t.devCache;
+chrome.storage.local.get({ developer: false, noCache: false }).then((saved) => {
+  $('developer').checked = saved.developer;
+  $('devCacheRow').hidden = !saved.developer;
+  $('devCache').checked = saved.noCache;
+});
+$('developer').onchange = (event) => { chrome.storage.local.set({ developer: event.target.checked }); $('devCacheRow').hidden = !event.target.checked; };
+$('devCache').onchange = (event) => chrome.storage.local.set({ noCache: event.target.checked });
+
 async function showSites() {
   const { origins } = await chrome.permissions.getAll();
   const sites = sitesFromOrigins(origins);

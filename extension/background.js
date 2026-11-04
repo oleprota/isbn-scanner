@@ -1,8 +1,8 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
-import { pickIsbn } from './pickIsbn.js';
-import { THIN_RATING_COUNT, isThin, lookupBook } from './shared/lookup.js';
-import { isbnLinks } from './shared/links.js';
+import { pickIsbn, candidates } from './pickIsbn.js';
+import { THIN_RATING_COUNT, isThin, lookupBook, setNoCache } from './shared/lookup.js';
+import { isbnLinks, goodreadsSearch } from './shared/links.js';
 import { card as cardTexts, formatRating } from './shared/strings.js';
 import { frame, auto as autoTexts } from './texts.js';
 import { sitePatterns, hostPatterns, sitesFromOrigins } from './sites.js';
@@ -15,7 +15,7 @@ async function inject(tabId, url, auto) {
   const enabled = !!patterns && await chrome.permissions.contains({ origins: patterns });
   const target = { tabId };
   const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
-    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel };
+    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, seriesLabel: cardTexts.seriesLabel, authorLabel: cardTexts.authorLabel };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -100,13 +100,19 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
   if (page.toggleSite) { toggleSite(sender.tab.url).then(respond); return true; }
   (async () => {
     const isbn = pickIsbn(page);
-    if (!isbn) return respond({ problem: 'noIsbn' });
+    // Developer mode (options page; ADR-0003) adds a line of facts to the answer, and its "no cache" check skips the caches.
+    const { developer, noCache } = await chrome.storage.local.get({ developer: false, noCache: false });
+    setNoCache(developer && noCache);
+    const debug = (text) => (developer ? { debug: `dev: ${text}` } : {});
+    if (!isbn) return respond({ problem: 'noIsbn', ...debug('no ISBN found') });
     chrome.tabs.sendMessage(sender.tab.id, { searching: true }).catch(() => {}); // ISBN found: now the Goodreads lookup
-    let why;
-    const details = await lookupBook(isbn, { report: (outcome, ms, detail) => { why = cardTexts.lookupWhy({ outcome, ...detail }); } });
-    if (!details) return respond({ problem: 'lookup', message: why });
+    let why, outcome, took, detail;
+    const details = await lookupBook(isbn, { report: (o, ms, d) => { [outcome, took, detail] = [o, ms, d]; why = cardTexts.lookupWhy({ outcome: o, ...d }); } });
+    const seen = candidates(page).map((c) => `${c.isbn}${['', ' paper'][c.rank] ?? ' e-book/audio'} (${c.score})`).join(', ');
+    const facts = debug(`${isbn} · of ${seen} · ${outcome}${Object.keys(detail ?? {}).length ? ` ${JSON.stringify(detail)}` : ''} · ${took} ms`);
+    if (!details) return respond({ problem: 'lookup', message: why, ...facts });
     const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
-    respond({ card: { ...details, isbn, links, rating: shapeRating(details.rating) } });
+    respond({ ...facts, card: { ...details, isbn, links, rating: shapeRating(details.rating), seriesUrl: details.series && goodreadsSearch(details.series.name) } });
   })();
   return true; // the answer comes later
 });
