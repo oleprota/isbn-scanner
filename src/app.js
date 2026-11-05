@@ -2,7 +2,7 @@ import { isValidIsbn, looksLikeIsbn, normalizeIsbn } from './isbn.js';
 import { isbnLinks } from './links.js';
 import { startScanner } from './scanner.js';
 import { createScanSession } from './scanSession.js';
-import { hashForIsbn, isbnFromHash } from './hash.js';
+import { grFromHash, hashForGr, hashForIsbn, isbnFromHash } from './hash.js';
 import { isbnId } from './bookId.js';
 import { candidateId, detailsFromCandidate } from './candidate.js';
 import { createListStore } from './storage.js';
@@ -592,18 +592,21 @@ function pickCandidate(candidate) {
   if (!titles.detailsCurrent(id)) titles.setDetails(id, detailsFromCandidate(candidate), { partial: true }); // never replaces full details
   const book = { id, title: titles.of(id) };
   noteScanned(book);
+  if (grFromHash(location.hash) !== candidate.id) history.pushState(null, '', hashForGr(candidate.id));
   requestEdition(id, (edition) => stats.track('title_pick', { isbn: edition ? 1 : 0, details: edition?.found ? 1 : 0 }));
   renderBook(book);
   input.blur();
 }
 
 // A listed book with no ISBN is shown again from what is stored; its edition is asked again until it has answered.
-function showPicked(entry) {
+// `push: false`: the card comes from the address itself (load, Back/Forward), so no history entry is added.
+function showPicked(entry, { push = true } = {}) {
   pickToken++;
   closeScanner();
   clearWarning();
   setStatus('');
   input.value = '';
+  if (push && grFromHash(location.hash) !== entry.id.slice(3)) history.pushState(null, '', hashForGr(entry.id.slice(3)));
   const book = { id: entry.id, title: titles.of(entry.id) };
   noteShown(book);
   requestEdition(book.id);
@@ -649,11 +652,29 @@ function search(isbn, { push = true, move = true, via = 'typed' } = {}) {
   input.blur();
 }
 
+// `#gr=<id>`: the card of a book with no ISBN is built from what is stored; an id never seen is asked of the
+// service, and when that gives no book the link is ignored without a message.
+async function showGrLink(num) {
+  const id = `gr:${num}`;
+  if (scanned.has(id) || marked.has(id) || titles.foundBy(id) || titles.details(id)) return showPicked({ id }, { push: false });
+  if (!LOOKUP_URL) return;
+  const token = ++pickToken;
+  const edition = await editionOfBook(num);
+  if (token !== pickToken || !edition?.found) return;
+  titles.rekey(isbnId(edition.isbn), id); // the same book already stored by its ISBN is merged into this one
+  titles.setFoundBy(id, { title: edition.found.title, author: edition.found.author?.name, url: `https://www.goodreads.com/book/show/${num}` });
+  titles.setDetails(id, edition.found, { isbn: edition.isbn });
+  showPicked({ id }, { push: false });
+}
+
 window.addEventListener('popstate', () => {
   const isbn = isbnFromHash(location.hash);
+  const gr = grFromHash(location.hash);
   if (isbn) {
     input.value = isbn;
     search(isbn, { push: false, move: false, via: 'history' });
+  } else if (gr) {
+    showGrLink(gr);
   } else {
     pickToken++;
     closeScanner();
@@ -694,4 +715,4 @@ const linkedIsbn = isbnFromHash(location.hash);
 if (linkedIsbn) {
   input.value = linkedIsbn;
   search(linkedIsbn, { push: false, move: false, via: 'link' });
-}
+} else if (grFromHash(location.hash)) showGrLink(grFromHash(location.hash));
