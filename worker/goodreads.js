@@ -74,16 +74,31 @@ const findBook = (html) =>
     .find((block) => block?.['@type'] === 'Book');
 
 // The books in Goodreads' search-as-you-type answer (an array): up to 5 of
-// `{ id, title, author, image }`. Entries without an id or a title are dropped.
+// `{ id, title, author, image, rating, ratingCount, bookUrl, authorUrl }`. Entries without an id or a title are dropped.
+// `rating` and `ratingCount` are numbers (0 = unknown); the addresses are absolute Goodreads addresses or ''.
+const BOOK_URL = 'https://www.goodreads.com/book/';
+const goodreadsUrl = (value, prefix) => {
+  if (typeof value !== 'string') return '';
+  const absolute = value.startsWith('/') ? `https://www.goodreads.com${value}` : value;
+  return absolute.startsWith(prefix) ? absolute : '';
+};
 export function parseCandidates(data) {
   if (!Array.isArray(data)) return null;
   return data
-    .map((b) => ({
-      id: String(b?.bookId ?? ''),
-      title: text(b?.bookTitleBare ?? b?.title, 120),
-      author: text(b?.author?.name, 100),
-      image: typeof b?.imageUrl === 'string' && b.imageUrl.startsWith('https://') ? b.imageUrl : '',
-    }))
+    .map((b) => {
+      const rating = Number(b?.avgRating);
+      const count = Number(String(b?.ratingsCount ?? '').replace(/,/g, ''));
+      return {
+        id: String(b?.bookId ?? ''),
+        title: text(b?.bookTitleBare ?? b?.title, 120),
+        author: text(b?.author?.name, 100),
+        image: typeof b?.imageUrl === 'string' && b.imageUrl.startsWith('https://') ? b.imageUrl : '',
+        rating: rating > 0 && rating <= 5 ? rating : 0,
+        ratingCount: Number.isInteger(count) && count > 0 ? count : 0,
+        bookUrl: goodreadsUrl(b?.bookUrl, BOOK_URL),
+        authorUrl: goodreadsUrl(b?.author?.profileUrl, AUTHOR_URL),
+      };
+    })
     .filter((b) => /^\d{1,12}$/.test(b.id) && b.title)
     .slice(0, 5);
 }

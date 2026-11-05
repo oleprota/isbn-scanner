@@ -1,6 +1,6 @@
 // ISBN lookup service, for the app (a browser page can't read Goodreads: no CORS headers there):
 //   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image, bookId?} or 404 {reason}
-//   GET /search?q=<title>    -> {results: [{id, title, author, image}]} (up to 5)
+//   GET /search?q=<title>    -> {results: [{id, title, author, image, rating, ratingCount, bookUrl, authorUrl}]} (up to 5)
 //   GET /book?id=<book id>   -> {isbn, title, series, author, rating, image} of that Goodreads edition, or 404 {reason}
 //   POST /event              -> 204; a batch of anonymous usage events, kept in D1 when it is set up (events.js)
 // Runs as a Cloudflare Worker, see README.md in this folder.
@@ -161,7 +161,7 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
       const query = param('q').slice(0, 100);
       if (query.length < 2) return json({ error: 'query too short' }, 400, 0, cors);
       kind = 'search';
-      key = `search1/${encodeURIComponent(query.toLowerCase())}`;
+      key = `search2/${encodeURIComponent(query.toLowerCase())}`;
       work = async () => {
         const started = Date.now();
         const { results, tries } = await searchGoodreads(query, fetchFn);

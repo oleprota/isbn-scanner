@@ -49,6 +49,7 @@ export const search = {
   noTitleResults: 'За такою назвою нічого не знайдено.',
   searchFailed: 'Не вдалося знайти. Спробуйте ще раз.',
   gettingIsbn: 'Шукаю ISBN…',
+  candidateRating: (value) => (value > 0 ? `★ ${value.toFixed(2)}` : '★ n/a'),
   noIsbn: (title) => `Не вдалося дізнатись ISBN для «${title}». Спробуйте інше видання.`,
 };
 

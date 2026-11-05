@@ -90,5 +90,7 @@ test('parseEdition is the book with the edition\'s ISBN when it is valid, else n
 
 test('parseCandidates keeps id and title, cleans the rest, and is null for a non-list', () => {
   assert.equal(parseCandidates({}), null);
-  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '' }]);
+  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '', rating: 0, ratingCount: 0, bookUrl: '', authorUrl: '' }]);
+  const [full] = parseCandidates([{ bookId: '7', title: 'T', avgRating: '4.29', ratingsCount: '1,234', bookUrl: '/book/show/7', author: { name: 'A', profileUrl: 'https://www.goodreads.com/author/show/9' } }]);
+  assert.deepEqual([full.rating, full.ratingCount, full.bookUrl, full.authorUrl], [4.29, 1234, 'https://www.goodreads.com/book/show/7', 'https://www.goodreads.com/author/show/9']);
 });

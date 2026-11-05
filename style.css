@@ -135,6 +135,7 @@ body:has(#scanner:not([hidden])) #status:empty { display: block; }
 .candidate-title { font-weight: 600; overflow-wrap: anywhere; }
 .candidate-author { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 .candidate-author:empty { display: none; }
+.candidate-rating { flex: none; margin-left: auto; color: var(--muted); font-size: .85rem; white-space: nowrap; }
 .warning { margin: 1rem 0 0; padding: .6rem .8rem; border-radius: 8px; border: 1px solid var(--error); color: var(--error); background: var(--card); }
 .meta { color: var(--muted); margin: .25rem 0; }
 .footer { margin-top: 2rem; font-size: .8rem; text-align: center; }

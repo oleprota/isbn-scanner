@@ -163,6 +163,7 @@ function setStatus(text, isError = false, ttl = 0) {
 // the field is edited; a confirmation (Copied) goes away on its own.
 const NOTE_MS = 4000;
 input.addEventListener('input', () => {
+  hideCandidates();
   setStatus('');
   clearWarning();
 });
@@ -539,6 +540,18 @@ async function searchTitle(text) {
   input.blur();
 }
 
+// The candidate list goes away (with its "choose a book" status) when the text changes, on a click outside it
+// (the field itself excepted), on Escape and when a candidate is picked.
+function hideCandidates() {
+  if (!result.querySelector('.candidates')) return;
+  result.replaceChildren();
+  setStatus('');
+}
+document.addEventListener('click', (event) => {
+  if (!event.target.closest?.('.candidates') && event.target !== input) hideCandidates();
+});
+document.addEventListener('keydown', (event) => event.key === 'Escape' && hideCandidates());
+
 function candidateList(found, token) {
   const list = el('ul', null, 'candidates');
   for (const book of found) {
@@ -547,8 +560,9 @@ function candidateList(found, token) {
     if (book.image) pick.append(coverImage(book.image));
     const text = el('span', null, 'candidate-text');
     text.append(el('span', book.title, 'candidate-title'), el('span', book.author, 'candidate-author'));
-    pick.append(text);
+    pick.append(text, el('span', str.search.candidateRating(book.rating), 'candidate-rating'));
     pick.addEventListener('click', async () => {
+      hideCandidates();
       setStatus(str.search.gettingIsbn);
       const edition = await editionOfBook(book.id);
       if (token !== pickToken) return;

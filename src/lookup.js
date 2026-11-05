@@ -48,7 +48,9 @@ function cleanRating(rating) {
   return value > 0 && value <= 5 && Number.isInteger(count) && count > 0 ? { value, count } : null;
 }
 
-// The candidates of a title search: up to 5 of { id, title, author, image }, or null when the answer is not a list of results.
+// The candidates of a title search: up to 5 of { id, title, author, image, rating, ratingCount, bookUrl, authorUrl }
+// (rating 0 = unknown; an answer without the newer fields is still fine), or null when the answer is not a list of results.
+const BOOK_URL = 'https://www.goodreads.com/book/';
 export function cleanResults(data) {
   if (!Array.isArray(data?.results)) return null;
   return data.results
@@ -57,6 +59,10 @@ export function cleanResults(data) {
       title: clean(b?.title, 120),
       author: clean(b?.author, 100),
       image: typeof b?.image === 'string' && b.image.startsWith('https://') ? b.image : '',
+      rating: Number(b?.rating) > 0 && Number(b.rating) <= 5 ? Number(b.rating) : 0,
+      ratingCount: Number.isInteger(b?.ratingCount) && b.ratingCount > 0 ? b.ratingCount : 0,
+      bookUrl: typeof b?.bookUrl === 'string' && b.bookUrl.startsWith(BOOK_URL) ? b.bookUrl : '',
+      authorUrl: typeof b?.authorUrl === 'string' && b.authorUrl.startsWith(AUTHOR_URL) ? b.authorUrl : '',
     }))
     .filter((b) => /^\d{1,12}$/.test(b.id) && b.title)
     .slice(0, 5);

@@ -159,7 +159,7 @@ test('cache bypass: the rate limiter still stops a bypassed request', async () =
   assert.equal(calls.length, 0);
 });
 
-const hit = (extra = {}) => ({ bookId: '32740697', bookTitleBare: 'Хірург', title: 'Хірург (Rizzoli & Isles #1)', imageUrl: 'https://i.gr-assets.com/a.jpg', avgRating: '4.10', author: { name: 'Tess Gerritsen' }, ...extra });
+const hit = (extra = {}) => ({ bookId: '32740697', bookTitleBare: 'Хірург', title: 'Хірург (Rizzoli & Isles #1)', imageUrl: 'https://i.gr-assets.com/a.jpg', avgRating: '4.10', ratingsCount: '1,234', bookUrl: '/book/show/32740697', author: { name: 'Tess Gerritsen', profileUrl: 'https://www.goodreads.com/author/show/1' }, ...extra });
 const suggestions = (list) => () => new Response(JSON.stringify(list));
 
 test('/search answers up to 5 cleaned candidates, from the search-as-you-type JSON', async () => {
@@ -168,9 +168,16 @@ test('/search answers up to 5 cleaned candidates, from the search-as-you-type JS
   assert.equal(response.status, 200);
   const { results } = await response.json();
   assert.equal(results.length, 5);
-  assert.deepEqual(results[0], { id: '32740697', title: 'Хірург', author: 'Tess Gerritsen', image: 'https://i.gr-assets.com/a.jpg' });
-  assert.deepEqual(results[1], { id: '2', title: 'Хірург', author: 'Tess Gerritsen', image: '' }); // 'x' is no id: dropped; the http cover is cleaned
+  assert.deepEqual(results[0], { id: '32740697', title: 'Хірург', author: 'Tess Gerritsen', image: 'https://i.gr-assets.com/a.jpg', rating: 4.1, ratingCount: 1234, bookUrl: 'https://www.goodreads.com/book/show/32740697', authorUrl: 'https://www.goodreads.com/author/show/1' });
+  assert.deepEqual(results[1], { id: '2', title: 'Хірург', author: 'Tess Gerritsen', image: '', rating: 0, ratingCount: 1234, bookUrl: 'https://www.goodreads.com/book/show/32740697', authorUrl: 'https://www.goodreads.com/author/show/1' }); // 'x' is no id: dropped; the http cover is cleaned
   assert.equal(calls[0], 'https://www.goodreads.com/book/auto_complete?format=json&q=%D0%A5%D1%96%D1%80%D1%83%D1%80%D0%B3');
+});
+
+test('/search drops addresses that are not Goodreads', async () => {
+  const { request } = setup(suggestions([hit({ bookUrl: 'https://evil.example/book/show/1', author: { name: 'T', profileUrl: 'javascript:x' } })]));
+  const [first] = (await (await request('/search?q=foreign')).json()).results;
+  assert.equal(first.bookUrl, '');
+  assert.equal(first.authorUrl, '');
 });
 
 test('/search rejects a missing or one-letter query, and says 502 when Goodreads fails; both are cached short or not at all', async () => {
