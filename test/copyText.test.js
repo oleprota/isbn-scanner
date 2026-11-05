@@ -39,7 +39,7 @@ test('a closing period of the title goes, ?, ! and an ellipsis stay', () => {
 test('a book found by title links to the searches, as the card does', () => {
   const found = { isbn: '1', title: 'Dune', author: 'Frank Herbert' }; // the stored entry also carries the isbn
   assert.deepEqual(bookText('Dune', { found }, null).split('\n').slice(1), [ereadian('Dune'), 'https://www.goodreads.com/search?q=Dune+Frank+Herbert']);
-  assert.equal(bookText('Dune', { found }).split('\n')[1], ereadian('1')); // once the ISBN is known Ereadian searches it
+  assert.equal(bookText('Dune', { found: { ...found, url: 'https://www.goodreads.com/book/show/9' } }).split('\n')[1], ereadian('1')); // with a page address and an ISBN Ereadian searches the ISBN
 });
 
 test('an entry saved by an earlier version (extra fields) is written by its title', () => {
