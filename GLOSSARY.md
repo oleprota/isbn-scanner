@@ -32,8 +32,16 @@ _Avoid_: Metadata, meta
 What the user typed for a book by tapping its title; it beats any found title.
 _Avoid_: Label, custom title
 
+**Book id**:
+What a stored book is matched by: `isbn:<isbn>`, or `gr:<Goodreads id>` for a book picked by title. A lookup that returns the Goodreads id upgrades `isbn:X` to `gr:N` and merges it with an existing `gr:N` book.
+_Avoid_: Key, uid
+
+**Goodreads page address**:
+The `bookUrl` of a candidate (or of a found book): the address Goodreads' own page for that book has. It is what the Goodreads link opens for a book found by title.
+_Avoid_: Goodreads link
+
 **Found by title**:
-A book picked from the candidates for a typed title, so its site links go by title (Ereadian) and by its Goodreads page (Goodreads) instead of the ISBN. It is shown at once, with no ISBN needed.
+A book picked from the candidates for a typed title, so its site links go by its Goodreads page address (Goodreads) and by the ISBN once known, else the title (Ereadian). It is shown at once, with no ISBN needed.
 
 
 **Page book**:
