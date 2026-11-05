@@ -119,3 +119,25 @@ test('stores are cut to their limit and corrupt entries are ignored', () => {
   assert.equal(small.of('1'), 'ISBN 1'); // the oldest was dropped
   assert.equal(small.of('3'), 'Book 3');
 });
+
+test('a refresh replaces the found details and title but keeps a typed name and the title pick', () => {
+  const { titles, scanned } = setup({
+    scanned: [row('1', 'Mine')],
+    names: [{ isbn: '1', name: 'Mine' }],
+    foundBy: [{ isbn: '1', title: 'Picked', author: 'A', url: 'https://www.goodreads.com/book/show/5' }],
+    details: [{ isbn: '1', title: 'Old', rating: { value: 3, count: 500 }, v: 8 }],
+  });
+  titles.setDetails('1', { ...found('New'), rating: { value: 4, count: 900 } });
+  assert.equal(titles.details('1').title, 'New');
+  assert.deepEqual(titles.details('1').rating, { value: 4, count: 900 });
+  assert.equal(titles.of('1'), 'Mine');
+  assert.equal(scanned.list()[0].title, 'Mine');
+  assert.equal(titles.foundBy('1').title, 'Picked');
+});
+
+test('a refresh renames a book that was titled by the earlier lookup', () => {
+  const { titles, scanned } = setup({ scanned: [row('1', 'Old')], details: [{ isbn: '1', title: 'Old', v: 8 }] });
+  titles.setDetails('1', found('New'));
+  assert.equal(titles.of('1'), 'New');
+  assert.equal(scanned.list()[0].title, 'New');
+});

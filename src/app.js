@@ -5,6 +5,7 @@ import { createScanSession } from './scanSession.js';
 import { grFromHash, hashForGr, hashForIsbn, isbnFromHash } from './hash.js';
 import { isbnId } from './bookId.js';
 import { candidateId, detailsFromCandidate } from './candidate.js';
+import { createRefreshGate } from './refreshGate.js';
 import { createListStore } from './storage.js';
 import { bucket, createStats, describeClient } from './stats.js';
 import { createBookList } from './bookList.js';
@@ -252,6 +253,7 @@ function titleHeading(book, waiting) {
 // `book` is { id, isbn?, title }: a book picked by title has no ISBN until its edition request answers (kept in its
 // details). `failure`: this card's own memory of a failed edition request ({ outcome, reason, status }), never stored.
 let shown = null;
+const refreshGate = createRefreshGate(); // one refresh a minute, for every book
 
 function renderBook(book) {
   const card = el('article', null, 'book');
@@ -285,11 +287,25 @@ function renderBook(book) {
     refresh();
   };
   // the star sits at the right edge of the card, like the buttons at the end of the list rows
-  head.append(body, markToggle.create(book));
+  const refreshButton = iconButton('\u21BB\uFE0E', str.card.refresh); // ↻
+  refreshButton.classList.add('refresh');
+  refreshButton.hidden = !LOOKUP_URL;
+  refreshButton.addEventListener('click', () => {
+    if (!refreshGate.ready() || pending.has(book.id) || editionsRunning.has(book.id)) return; // a request already out: nothing to ask, keep the minute
+    refreshGate.start();
+    stats.track('refresh', { by_title: book.id.startsWith('gr:') ? 1 : 0 });
+    if (book.id.startsWith('gr:')) requestEdition(book.id, { retry: true, fresh: true });
+    else requestMeta(book.id.slice(5), { fresh: true });
+    shown?.syncRefresh();
+    setTimeout(() => shown?.syncRefresh(), refreshGate.left()); // every card's button opens again together
+  });
+  const syncRefresh = () => { refreshButton.disabled = !refreshGate.ready(); };
+  syncRefresh();
+  head.append(body, refreshButton, markToggle.create(book));
   setDetails(titles.details(book.id));
   card.append(head, facts, links);
   result.replaceChildren(card);
-  shown = Object.assign(self, { update, setDetails, setWaiting, refresh, refreshLinks: refresh });
+  shown = Object.assign(self, { syncRefresh, update, setDetails, setWaiting, refresh, refreshLinks: refresh });
 }
 
 // Asks the lookup service for the book's name and cover, in the background: the card, the beep and
@@ -298,14 +314,16 @@ const asked = new Set();
 const pending = new Set(); // asked and not answered yet: its card shows a spinner beside the title
 const editionsRunning = new Set(); // books picked by title whose edition request is out (asked again at every card until it answers)
 
-function requestMeta(isbn) {
+// `fresh`: the user's refresh button; it asks again even when the details are current, and skips the service's caches.
+function requestMeta(isbn, { fresh = false } = {}) {
   const id = titles.idOf(isbn);
   // an entry saved by an older version lacks the new fields: it is shown until the answer replaces it
-  if (!LOOKUP_URL || titles.detailsCurrent(id) || asked.has(id)) return;
+  if (!LOOKUP_URL || pending.has(id) || (!fresh && (titles.detailsCurrent(id) || asked.has(id)))) return;
   asked.add(id);
   pending.add(id);
+  if (fresh && shownCard(id)) shown.setWaiting(true);
   renderLists(); // the rows of this book show the spinner too (several lookups can run at once while scanning)
-  lookupBook(isbn, { report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
+  lookupBook(isbn, { fresh, report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
     pending.delete(id);
     if (found) return applyLookup(id, isbn, found);
     asked.delete(id); // nothing changed: the next card of this book asks again
@@ -337,19 +355,19 @@ function applyLookup(id, isbn, { bookId, ...found }) {
 // known by that ISBN is merged into this one. A failure never blocks anything: the card shows "(не знайдено)" with
 // a button (`retry`: the user's) and nothing is remembered, so every card built for the book asks again.
 // The answer is reported once to the usage stats (`isbn_found`).
-function requestEdition(id, { retry = false } = {}) {
-  if (!LOOKUP_URL || editionsRunning.has(id) || (titles.detailsCurrent(id) && titles.details(id).isbn)) return;
+function requestEdition(id, { retry = false, fresh = false } = {}) {
+  if (!LOOKUP_URL || editionsRunning.has(id) || (!fresh && titles.detailsCurrent(id) && titles.details(id).isbn)) return;
   editionsRunning.add(id);
   let why = {};
   if (shownCard(id)) shown.refresh();
-  editionOfBook(id.slice(3), { report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
+  editionOfBook(id.slice(3), { fresh, report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
     editionsRunning.delete(id);
     stats.track('isbn_found', { found: edition ? 1 : 0, result: why.outcome, reason: why.reason, ms: why.ms, retry: retry ? 1 : 0, details: edition?.found ? 1 : 0 });
     if (shownCard(id)) shown.failure = edition ? null : why;
     if (edition) {
       titles.rekey(isbnId(edition.isbn), id);
       if (edition.found) applyMeta(id, edition.found, edition.isbn);
-      else if (titles.details(id)) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
+      else if (titles.details(id) && !(fresh && titles.detailsCurrent(id))) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
     }
     if (shownCard(id)) shown.refresh();
     renderLists();

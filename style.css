@@ -87,7 +87,7 @@ body:has(#scanner:not([hidden])) #status:empty { display: block; }
 .book { background: var(--card); padding: 1rem; border-radius: 12px; border: 1px solid var(--line); }
 .book-head { display: flex; align-items: flex-start; gap: 1rem; }
 .book-main { flex: 1 1 auto; min-width: 0; } /* title and rating; the star button sits at the right edge, top-aligned with it */
-.book-head .mark-toggle { flex: none; }
+.book-head .mark-toggle, .book-head .refresh { flex: none; }
 .book-head .cover { flex: none; width: 56px; max-height: 84px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); }
 .book-title { margin: 0; display: flex; align-items: center; gap: .5rem; font-size: 1.4rem; line-height: 1.25; }
 /* The rating is the accent of the card: a gold star and a large number in the accent colour, with the count small and muted. */

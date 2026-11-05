@@ -164,3 +164,14 @@ test('a series address is kept only when it is a Goodreads series page', () => {
   assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url } }).series, { name: 'S', number: '1', url });
   assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url: 'javascript:alert(1)' } }).series, { name: 'S', number: '1' });
 });
+
+test('fresh: true adds nocache=1 to that one request (lookup and edition), not to the next', async () => {
+  const urls = [];
+  const fetchFn = async (u) => (urls.push(u), { ok: false, status: 404 });
+  await lookupBook('1', { url: 'https://w', fetchFn, fresh: true });
+  await editionOfBook('2', { url: 'https://w', fetchFn, fresh: true });
+  await lookupBook('1', { url: 'https://w', fetchFn });
+  assert.match(urls[0], /nocache=1/);
+  assert.match(urls[1], /nocache=1/);
+  assert.doesNotMatch(urls[2], /nocache/);
+});

@@ -12,6 +12,7 @@ export const EVENTS = {
   title_pick: ['isbn'], // at click time: 1 when the ISBN was already known
   isbn_found: ['found', 'result', 'reason', 'ms', 'retry', 'details'], // later: the edition request's answer (retry: 1 = the user's button, 0 = automatic)
   star: ['on'],
+  refresh: ['by_title'], // the card's refresh button (1 = a book found by title)
   copy: ['list', 'ok'],
   sort: ['list', 'mode'],
   title_edit: ['cleared'],

@@ -85,7 +85,7 @@ export function cleanEdition(data) {
 // spinner runs until the final answer. `report(outcome, ms, detail)` (optional, for the usage stats and the messages) is told how it ended:
 // found, invalid (an answer that is not usable), missing (404), busy (429 to the end), timeout, offline or error. `detail` is { reason } for missing (the worker's, see REASONS, or 'no-reason') and { status } for error.
 const REASONS = ['page-404', 'page-empty', 'page-refused', 'page-down', 'page-no-book']; // the worker's reasons for a 404 (worker/index.js)
-async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report } = {}) {
+async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, timeout = TIMEOUT_MS, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), report, fresh = false } = {}) {
   if (!url) return null;
   const started = Date.now();
   const done = (outcome, value = null, detail = {}) => {
@@ -94,7 +94,7 @@ async function ask(path, params, parse, { url = LOOKUP_URL, fetchFn = fetch, tim
   };
   for (let attempt = 0; attempt <= BUSY_RETRIES; attempt++) {
     try {
-      const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCache ? { ...params, nocache: 1 } : params)}`, { signal: AbortSignal.timeout(timeout) });
+      const response = await fetchFn(`${url}/${path}?${new URLSearchParams(noCache || fresh ? { ...params, nocache: 1 } : params)}`, { signal: AbortSignal.timeout(timeout) });
       if (response.status !== 429) {
         if (!response.ok) {
           if (response.status !== 404) return done('error', null, { status: response.status });

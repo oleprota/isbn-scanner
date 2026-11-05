@@ -63,6 +63,7 @@ export const scanner = {
 export const card = {
   // the title of a book that has no name (also stored with the lists, so keep it stable)
   isbnTitle: (isbn) => `ISBN ${isbn}`,
+  refresh: 'Оновити дані книги',
   ratingLabel: 'Рейтинг на Goodreads',
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
   thinTitle: (threshold) => `Менше ${threshold} оцінок — рейтинг ненадійний`, // the warning icon's popover and tooltip
