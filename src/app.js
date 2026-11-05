@@ -12,7 +12,7 @@ import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
 import { coverImage, factsBlock, ratingBlock } from './details.js';
-import { LOOKUP_URL, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
+import { LOOKUP_URL, bookPageUrl, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
 import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
@@ -271,10 +271,11 @@ function renderBook(book) {
   head.append(body, markToggle.create(book));
   setDetails(titles.details(book.id));
   const links = el('div', null, 'link-row');
-  links.append(...isbnLinks(book.isbn, titles.foundBy(book.id)).map((link) => linkButton(link, { big: true })));
+  const refreshLinks = (found) => links.replaceChildren(...isbnLinks(book.isbn, found).map((link) => linkButton(link, { big: true })));
+  refreshLinks(titles.foundBy(book.id));
   card.append(head, facts, links);
   result.replaceChildren(card);
-  shown = { card, book, update, setDetails, setWaiting };
+  shown = { card, book, update, setDetails, setWaiting, refreshLinks };
 }
 
 // Asks the lookup service for the book's name and cover, in the background: the card, the beep and
@@ -284,7 +285,7 @@ const pending = new Set(); // asked and not answered yet: its card shows a spinn
 const editionsRunning = new Set(); // books picked by title whose edition request is out (asked again at every card until it answers)
 
 function requestMeta(isbn) {
-  const id = isbnId(isbn);
+  const id = titles.idOf(isbn);
   // an entry saved by an older version lacks the new fields: it is shown until the answer replaces it
   if (!LOOKUP_URL || titles.detailsCurrent(id) || asked.has(id)) return;
   asked.add(id);
@@ -292,10 +293,29 @@ function requestMeta(isbn) {
   renderLists(); // the rows of this book show the spinner too (several lookups can run at once while scanning)
   lookupBook(isbn, { report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
     pending.delete(id);
-    if (found) return applyMeta(id, found);
+    if (found) return applyLookup(id, isbn, found);
+    asked.delete(id); // nothing changed: the next card of this book asks again
     if (shownCard(id)) shown.setWaiting(false);
     renderLists();
   });
+}
+
+// The answer for an ISBN: when it carries the Goodreads book id, the book `isbn:X` becomes `gr:N` (merging a book already
+// stored as `gr:N`), and a book found by title gets its Goodreads page address. Silent.
+function applyLookup(id, isbn, { bookId, ...found }) {
+  let now = id;
+  if (bookId && id.startsWith('isbn:')) {
+    now = `gr:${bookId}`;
+    titles.rekey(id, now);
+    const picked = titles.foundBy(now);
+    if (picked && !picked.url) titles.setFoundBy(now, { ...picked, url: bookPageUrl(bookId) });
+    if (shown?.book.id === id) { // the card on screen is that book: it follows the id
+      shown.book.id = now;
+      shown.card.querySelector('.mark-toggle').dataset.id = now;
+      shown.refreshLinks(titles.foundBy(now));
+    }
+  }
+  applyMeta(now, found, isbn);
 }
 
 // The edition request of a book picked by title (`gr:<n>`), in the background: its card and row are already there.
@@ -322,7 +342,7 @@ const shownCard = (id) => shown?.book.id === id && result.contains(shown.card);
 function applyMeta(id, found, isbn) {
   const replaceable = titles.setDetails(id, found, { isbn });
   // an answer for a card that is no longer on screen only fills the cache
-  if (shownCard(isbn)) {
+  if (shownCard(id)) {
     shown.setWaiting(false);
     if (replaceable(shown.book.title)) shown.update(found.title);
     shown.setDetails(found);
@@ -416,11 +436,12 @@ function noteShown(book) {
 }
 
 // A book known by its ISBN: { id, isbn, title }.
-const isbnBook = (isbn) => ({ id: isbnId(isbn), isbn, title: titles.of(isbn) });
+// (the id is `gr:<n>` for a book the lookup has upgraded)
+const isbnBook = (isbn) => ({ id: titles.idOf(isbn), isbn, title: titles.of(isbn) });
 
 // A series read a book: add it to Scanned (or move it to the top if it is already there).
 function addScanned(isbn, again) {
-  titles.clearFoundBy(isbnId(isbn)); // a barcode is the real ISBN of the book in hand
+  titles.clearFoundBy(titles.idOf(isbn)); // a barcode is the real ISBN of the book in hand
   clearWarning();
   const book = isbnBook(isbn);
   if (again) return noteScanned(book);
@@ -430,7 +451,7 @@ function addScanned(isbn, again) {
   } else setStatus(str.lists.notAdded(book.title), true);
 }
 
-const scannedTitle = (isbn) => scanned.list().find((book) => book.id === isbnId(isbn))?.title;
+const scannedTitle = (isbn) => scanned.list().find((book) => book.id === titles.idOf(isbn))?.title;
 
 const session = createScanSession({
   // a new <video> for every start: an iPhone kept showing a later start's picture unfitted to the box when the element was reused
@@ -640,7 +661,7 @@ function search(isbn, { push = true, move = true, via = 'typed' } = {}) {
   result.replaceChildren();
   stats.track('search', { via, ok: isValidIsbn(isbn) ? 1 : 0 });
   if (!isValidIsbn(isbn)) return setStatus(str.search.invalidIsbn, true);
-  if (move) titles.clearFoundBy(isbnId(isbn)); // a search by ISBN clears the title a book was once found by
+  if (move) titles.clearFoundBy(titles.idOf(isbn)); // a search by ISBN clears the title a book was once found by
   if (push && isbnFromHash(location.hash) !== isbn) history.pushState(null, '', hashForIsbn(isbn));
 
   const book = isbnBook(isbn);

@@ -17,3 +17,5 @@ Read `../verify-app/common.md` first (setup, closing check, report). Never call 
 Optional (online only): open `https://www.goodreads.com/book/isbn/9780747532699` and `https://ereadian.com/search?q=9786171299412` once to confirm they still lead somewhere sensible.
 
 Finish with the closing check from `common.md`. The only console errors expected here are the browser's own "Failed to load resource" lines for the mocked 404/500 answers.
+
+**Details version 6 / book id.** Details stored before version 6 (`v:5`) are asked again once, silently (no message, no spinner change beyond the usual), when the book's card is next built. A `/lookup` answer with `bookId` re-keys the book `isbn:X` → `gr:N` (see `verify-lists` 7c); a failed lookup leaves storage as it was and the next card build asks again.

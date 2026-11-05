@@ -48,7 +48,7 @@ test('details saved partial are told apart from current ones', () => {
   titles.setDetails(A, { title: 'T', image: '', series: null, author: null, rating: null });
   assert.equal(titles.detailsPartial(A), false);
   assert.equal(titles.detailsCurrent(A), true);
-  assert.equal(titles.detailsCurrent(B), true); // legacy v5 details without `partial` are current
+  assert.equal(titles.detailsCurrent(B), false); // legacy v5 details are asked again once (version 6)
 });
 
 test('rekey turns isbn:X into gr:N and merges a duplicate, keeping the star, the name and the older position', () => {
@@ -70,4 +70,62 @@ test('rekey without a duplicate renames in place; different Goodreads ids stay s
   assert.equal(rekeyList([{ id: 'gr:1', title: 'a' }, { id: 'gr:2', title: 'b' }], 'gr:1', 'gr:2'), null);
   assert.equal(rekeyList(list, isbnId(A), 'isbn:other'), null);
   assert.equal(rekeyList(list, 'isbn:missing', 'gr:1'), null);
+});
+
+test('an upgraded book answers to its ISBN: idOf, has and the stores find gr:N', () => {
+  const { scanned, titles } = legacy();
+  titles.rekey(isbnId(A), 'gr:7');
+  assert.equal(titles.idOf(A), 'gr:7');
+  assert.equal(titles.idOf(B), isbnId(B));
+  assert.equal(scanned.has(A), true);
+  assert.equal(titles.of(A), 'Mine'); // the typed name survived
+  assert.equal(titles.of('gr:7'), 'Mine');
+});
+
+test('scanned first, then the same Goodreads book picked by title (and the other way round): one entry, star, name and position kept', () => {
+  for (const titleFirst of [false, true]) {
+    const { scanned, marked, titles, stores } = legacy();
+    const picked = { id: 'gr:7', title: 'Picked', addedAt: 'x' };
+    if (titleFirst) { // the picked book is the older, unstarred one; the scanned A is newer and starred
+      stores.scanned.write([row(A, 'Old A'), picked]);
+      stores.marked.write([row(A, 'Old A')]);
+    } else { // the scanned A is the older; the picked one is newer
+      stores.scanned.write([picked, row(A, 'Old A')]);
+      stores.marked.write([row(A, 'Old A')]);
+    }
+    titles.rekey(isbnId(A), 'gr:7');
+    const ids = scanned.list().map((e) => e.id);
+    assert.deepEqual(ids, ['gr:7']);
+    assert.equal(scanned.list()[0].isbn, A);
+    assert.deepEqual(marked.list().map((e) => e.id), ['gr:7']);
+    assert.equal(titles.of('gr:7'), 'Mine');
+  }
+});
+
+test('the older list position wins when a scanned book merges into a picked one', () => {
+  const { scanned, titles, stores } = legacy();
+  stores.scanned.write([row(B, 'b'), { id: 'gr:7', title: 'P', addedAt: 'x' }, row(A, 'a'), row('9780141365466', 'c')]);
+  titles.rekey(isbnId(A), 'gr:7');
+  assert.deepEqual(scanned.list().map((e) => e.id), [isbnId(B), 'gr:7', isbnId('9780141365466')]);
+});
+
+test('different Goodreads books (editions) stay separate', () => {
+  const { scanned, titles, stores } = legacy();
+  stores.scanned.write([{ id: 'gr:7', title: 'P', addedAt: 'x' }, { id: 'gr:8', title: 'Q', addedAt: 'x' }]);
+  titles.rekey('gr:7', 'gr:8');
+  assert.deepEqual(scanned.list().map((e) => e.id), ['gr:7', 'gr:8']);
+});
+
+test('the lookup upgrade: a title-found legacy book keeps its list position and name; details are stored under gr:N with the ISBN', () => {
+  const { scanned, titles } = legacy();
+  const bump = (e) => e; void bump;
+  titles.rekey(isbnId(B), 'gr:9');
+  titles.setFoundBy('gr:9', { ...titles.foundBy('gr:9'), url: 'https://www.goodreads.com/book/show/9' });
+  titles.setDetails('gr:9', { title: 'Found B2', image: '', series: null, author: null, rating: null }, { isbn: B });
+  assert.equal(titles.detailsCurrent('gr:9'), true);
+  assert.equal(titles.details('gr:9').isbn, B);
+  assert.equal(titles.foundBy('gr:9').title, 'Picked B');
+  assert.equal(titles.foundBy('gr:9').url, 'https://www.goodreads.com/book/show/9');
+  assert.equal(scanned.list()[0].id, 'gr:9');
+  assert.equal(scanned.list()[0].title, 'Found B2'); // the default `ISBN <isbn>` row title is replaced
 });

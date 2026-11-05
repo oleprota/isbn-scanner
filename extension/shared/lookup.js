@@ -51,6 +51,8 @@ function cleanRating(rating) {
 // The candidates of a title search: up to 5 of { id, title, author, image, rating, ratingCount, bookUrl, authorUrl }
 // (rating 0 = unknown; an answer without the newer fields is still fine), or null when the answer is not a list of results.
 const BOOK_URL = 'https://www.goodreads.com/book/';
+// The Goodreads page of a book id (the lookup answer's `bookId`)
+export const bookPageUrl = (bookId) => `${BOOK_URL}show/${bookId}`;
 export function cleanResults(data) {
   if (!Array.isArray(data?.results)) return null;
   return data.results

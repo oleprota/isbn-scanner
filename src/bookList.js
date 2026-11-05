@@ -1,7 +1,7 @@
 // A list of books by ISBN, newest first, persisted through a list store. Used for both the
 // "Scanned" list (everything looked up) and the "Marked" list (the ones picked from it).
 // Entries saved by earlier versions may carry extra fields (authors, ...); they are kept.
-import { hasKey, toId, withId, rekeyList } from './bookId.js';
+import { hasKey, matchesKey, toId, withId, rekeyList } from './bookId.js';
 
 export const isBookEntry = (e) => hasKey(e) && typeof e.title === 'string';
 
@@ -16,7 +16,7 @@ export function createBookList(store, limit = LIST_LIMIT) {
 
   return {
     list: read,
-    has: (key) => read().some((e) => e.id === toId(key)),
+    has: (key) => read().some((e) => matchesKey(e, key)),
     isFull: () => read().length >= limit,
     limit,
     // A book is { id?, isbn?, title }: a book with no ISBN has an id (`gr:<n>`), the rest get `isbn:<isbn>`.

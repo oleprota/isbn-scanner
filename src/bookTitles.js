@@ -15,9 +15,9 @@ import { createKeyed } from './keyed.js';
 import { cleanText } from './text.js';
 import { card } from './strings.js';
 import { isThin } from './lookup.js';
-import { hasKey, toId } from './bookId.js';
+import { hasKey, matchesKey, toId } from './bookId.js';
 
-export const DETAILS_VERSION = 5;
+export const DETAILS_VERSION = 6; // 6: a book is asked again once, to get its Goodreads book id (`isbn:X` becomes `gr:N`)
 export const NAME_MAX = 120;
 const AUTHOR_MAX = 100;
 
@@ -41,11 +41,15 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
     for (const list of lists) if (replaces(list.list().find((b) => b.id === id)?.title)) list.rename(id, title);
   };
   // the stores take an id, or a bare ISBN for `isbn:<isbn>`
-  const of = (key) => ofId(toId(key));
-  const fallback = (key) => fallbackOf(toId(key));
+  // (a bare ISBN also finds the book if it was upgraded to `gr:<n>`)
+  const idOf = (key) => (key.includes(':') ? key : [...lists.flatMap((l) => l.list()), ...looked.all()].find((e) => matchesKey(e, key))?.id ?? toId(key));
+  const of = (key) => ofId(idOf(key));
+  const fallback = (key) => fallbackOf(idOf(key));
 
   return {
     of,
+    // The id a book with this ISBN has now: `gr:<n>` once it was upgraded or merged, else `isbn:<isbn>`.
+    idOf,
     // what an empty name turns back into
     fallback,
     // Names the book (an empty name, or the fallback typed back, removes the name) and returns its title now.
@@ -77,8 +81,9 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
     setDetails(key, answer, { partial = false, isbn } = {}) {
       const id = toId(key);
       const earlier = looked.get(id)?.title;
-      const replaces = (title) => title === plain(id) || title === earlier;
       const own = id.startsWith('isbn:') ? id.slice(5) : isbn;
+      // an upgraded book (`gr:<n>`) may still be listed as `ISBN <isbn>`
+      const replaces = (title) => title === plain(id) || title === earlier || (own && title === card.isbnTitle(own));
       looked.put({ ...answer, id, ...(own && { isbn: own }), v: DETAILS_VERSION, ...(partial && { partial: true }) });
       retitle(id, answer.title, replaces);
       return replaces;

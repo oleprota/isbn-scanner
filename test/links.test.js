@@ -48,3 +48,11 @@ test('a book found by title links to a title search on Ereadian and a title-and-
   assert.equal(isbnLinks('9786171299412', { title: 'Хірург', author: '' })[1].url, 'https://www.goodreads.com/search?q=%D0%A5%D1%96%D1%80%D1%83%D1%80%D0%B3');
   assert.deepEqual(isbnLinks('9786171299412', null), isbnLinks('9786171299412'));
 });
+
+test('a title-found book with an ISBN and a page address (upgraded by the lookup) links Ereadian by ISBN and Goodreads by page', () => {
+  const found = { title: 'Хірург', author: 'Tess', url: 'https://www.goodreads.com/book/show/9' };
+  const [ereadian, goodreads] = isbnLinks('9786171299412', found);
+  assert.equal(ereadian.url, 'https://ereadian.com/search?q=9786171299412');
+  assert.equal(goodreads.url, found.url);
+  assert.equal(isbnLinks(undefined, found)[0].url, 'https://ereadian.com/search?q=%D0%A5%D1%96%D1%80%D1%83%D1%80%D0%B3'); // no ISBN: by title
+});

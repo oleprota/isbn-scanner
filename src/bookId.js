@@ -10,6 +10,8 @@ const hasId = (e) => typeof e.id === 'string' && e.id !== '';
 // An entry is usable when it has an ISBN or an id.
 export const hasKey = (e) => !!e && (typeof e.isbn === 'string' || hasId(e));
 export const withId = (e) => (hasId(e) ? e : { ...e, id: isbnId(e.isbn) });
+// An entry answers to a key: its id, or (for a bare ISBN) its ISBN too, since an upgraded book (`gr:<n>`) keeps its ISBN.
+export const matchesKey = (e, key) => (key.includes(':') ? e.id === key : e.isbn === key || e.id === isbnId(key));
 // Same book: by ISBN when both have one, else by id.
 export const sameBook = (a, b) => (a.isbn && b.isbn ? a.isbn === b.isbn : a.id === b.id);
 
