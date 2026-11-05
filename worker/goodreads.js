@@ -52,6 +52,17 @@ export function splitTitle(name) {
   return { title: title.trim(), series };
 }
 
+// The series the page itself names for this book: the link under its title, "The Chronicles of Saylok #1"
+// (it is in the page markup, not in the JSON-LD). `{ name, number, url }` with the series' own Goodreads page, or null.
+// shortcut: reads the first such link of the page (the book's own heading comes before any carousel), upgrade if Goodreads reorders it.
+const SERIES_URL = 'https://www.goodreads.com/series/';
+const SERIES_LINK = /<a href="(https:\/\/www\.goodreads\.com\/series\/[^"]{1,100})"[^>]*>([^<]{1,200})<!-- --> #(\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?)<\/a>/;
+export function pageSeries(html) {
+  const match = SERIES_LINK.exec(html ?? '');
+  const name = match && text(match[2], 80);
+  return name ? { name, number: match[3].replace(/\s+/g, ''), url: match[1] } : null;
+}
+
 const AUTHOR_URL = 'https://www.goodreads.com/author/';
 
 // The first author: { name, url } (the url only when it is a Goodreads author page).
@@ -103,14 +114,17 @@ export function parseCandidates(data) {
     .slice(0, 5);
 }
 
-// What the answer holds, from the page's Book block (null = no title, no data).
-function readBook(book) {
+// What the answer holds, from the page's Book block (null = no title, no data). The series: the one in the title's brackets
+// keeps its name and number (it is in the edition's language, which is better) and gets the page's address for the series;
+// without one, the series is what the page names. The title only loses its trailing brackets (`splitTitle`), nothing else.
+function readBook(book, html) {
   const name = text(book?.name, 200);
   if (!name) return null;
-  const { title, series } = splitTitle(name);
+  const { title, series: bracket } = splitTitle(name);
+  const page = pageSeries(html);
   return {
     title,
-    series,
+    series: bracket && page ? { ...bracket, url: page.url } : bracket ?? page,
     author: firstAuthor(book.author),
     rating: ratingOf(book.aggregateRating),
     image: typeof book.image === 'string' && book.image.startsWith('https://') ? book.image : '',
@@ -118,14 +132,14 @@ function readBook(book) {
 }
 
 // `{ title, series, author, rating, image }` for the first Book in the page, or null (no title = no data).
-export const parseBook = (html) => readBook(findBook(html));
+export const parseBook = (html) => readBook(findBook(html), html);
 
 // `{ isbn, title, series, author, rating, image }`: the Book of the page with the ISBN of its edition, or null
 // when the page has no valid ISBN. A picked search result is fully described by this one page.
 export function parseEdition(html) {
   const book = findBook(html);
   const isbn = normalizeIsbn(book?.isbn ?? '');
-  const details = readBook(book);
+  const details = readBook(book, html);
   return details && isValidIsbn(isbn) ? { isbn, ...details } : null;
 }
 

@@ -267,3 +267,15 @@ test('/lookup carries the book id of the redirect address, /book does not, and n
   const book = await setup(at('https://www.goodreads.com/book/show/4214')).request('/book?id=4214');
   assert.equal('bookId' in (await book.json()), false);
 });
+
+test('the series link comes after the JSON-LD, tens of KB into the page, and is still read', async () => {
+  const link = '<a href="https://www.goodreads.com/series/312023-the-chronicles-of-saylok">The Chronicles of Saylok<!-- --> #1</a><h1 data-testid="bookTitle">';
+  const page = (name) => `${html.replace('"Title"', JSON.stringify(name))}${'<div>filler</div>'.repeat(3000)}${link}${'<div>more</div>'.repeat(3000)}`;
+  const chunked = (text) => { // a real page arrives in chunks: the JSON-LD is complete in the first one
+    const bytes = new TextEncoder().encode(text);
+    return new ReadableStream({ start(c) { for (let i = 0; i < bytes.length; i += 8192) c.enqueue(bytes.slice(i, i + 8192)); c.close(); } });
+  };
+  const { get } = setup(goodreads(chunked(page('Перша дівчинка. Хроніки Сейлока. Книга 1'))));
+  const body = await (await get(`?isbn=${ISBN}`)).json();
+  assert.deepEqual([body.title, body.series], ['Перша дівчинка. Хроніки Сейлока. Книга 1', { name: 'The Chronicles of Saylok', number: '1', url: 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok' }]);
+});

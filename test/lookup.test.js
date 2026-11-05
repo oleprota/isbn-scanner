@@ -27,7 +27,7 @@ test('returns the cleaned answer and asks for the ISBN', async () => {
     fetchFn: async (url) => { requested = url; return answer(full)(); },
   });
   assert.deepEqual(found, { ...full, title: 'Шлях королів' });
-  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=8`);
+  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=10`);
 });
 
 test('an answer with only a title is fine; missing parts are empty', async () => {
@@ -157,4 +157,10 @@ test('a rating is thin under THIN_RATING_COUNT, not at it', () => {
   assert.equal(isThin({ value: 4, count: 100 }), false);
   assert.equal(isThin({ value: 4, count: 101 }), false);
   assert.equal(isThin(null), false);
+});
+
+test('a series address is kept only when it is a Goodreads series page', () => {
+  const url = 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok';
+  assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url } }).series, { name: 'S', number: '1', url });
+  assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url: 'javascript:alert(1)' } }).series, { name: 'S', number: '1' });
 });

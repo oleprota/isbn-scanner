@@ -98,12 +98,12 @@ export function isbnRows({ isbn, running, failed, why, retry }) {
 }
 
 // "Серія  Хроніки Буресвітла #1" and "Автор  Brandon Sanderson", each name a link to Goodreads
-// (the series a search for its name; the author's own page), then the ISBN row (`isbnRows`).
+// (the series its own page, or a search for its name; the author's own page), then the ISBN row (`isbnRows`).
 export function factsBlock({ series, author } = {}, isbn = []) {
   const facts = el('dl', null, 'facts');
   if (series) {
     const value = el('dd');
-    value.append(outsideLink(goodreadsSearch(series.name), series.name));
+    value.append(outsideLink(series.url ?? goodreadsSearch(series.name), series.name));
     if (series.number) value.append(el('span', ` #${series.number}`, 'series-number'));
     facts.append(el('dt', card.seriesLabel), value);
   }

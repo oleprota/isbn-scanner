@@ -30,6 +30,5 @@ export function isbnLinks(isbn, found = null) {
   ];
 }
 
-// A Goodreads search by text. Also stands in for a series' own page, which has an id that the lookup
-// does not return.
+// A Goodreads search by text. Also stands in for a series' own page when the lookup gave no address for it.
 export const goodreadsSearch = (text) => `https://www.goodreads.com/search?q=${encodeURIComponent(text)}`;

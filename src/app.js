@@ -365,7 +365,7 @@ function applyMeta(id, found, isbn) {
   // an answer for a card that is no longer on screen only fills the cache
   if (shownCard(id)) {
     shown.setWaiting(false);
-    if (replaceable(shown.book.title)) shown.update(found.title);
+    if (replaceable(shown.book.title)) shown.update(titles.of(id)); // not found.title: a merge may have brought a typed name
     shown.setDetails(found);
   }
   renderLists();

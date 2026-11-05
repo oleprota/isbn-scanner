@@ -8,7 +8,7 @@ import { cleanText as clean } from './text.js';
 export const LOOKUP_URL = 'https://isbn-lookup.oleprota.workers.dev'; // the deployed worker (worker/README.md); '' turns the lookup off
 const TIMEOUT_MS = 10000; // Goodreads pages sometimes take 4 s or more, and the worker may ask twice (an empty 202)
 const SEARCH_TIMEOUT_MS = 12000; // the worker may ask Goodreads up to 4 times in a row (it drops words while nothing is found)
-const SHAPE = 8; // the answer's shape, same as `v8` in worker/index.js: it keeps the browser's HTTP cache from serving an answer of an older shape
+const SHAPE = 10; // the answer's shape, same as `v10` in worker/index.js: it keeps the browser's HTTP cache from serving an answer of an older shape
 const BUSY_WAIT_MS = 5000; // the worker answered 429 (too many lookups at once): the request waits and goes again
 const BUSY_RETRIES = 3;
 
@@ -17,9 +17,10 @@ let noCache = false;
 export const setNoCache = (on) => { noCache = on; };
 
 const AUTHOR_URL = 'https://www.goodreads.com/author/';
+const SERIES_URL = 'https://www.goodreads.com/series/';
 
 // What the service said, checked field by field (it is rendered into the page, so nothing is trusted):
-// { title, [bookId: the Goodreads book id, when the service sent a valid one], image, series: {name, number} | null, author: {name, url} | null, rating: {value, count} | null }.
+// { title, [bookId: the Goodreads book id, when the service sent a valid one], image, series: {name, number, [url: the series' Goodreads page]} | null, author: {name, url} | null, rating: {value, count} | null }.
 export function cleanAnswer(data) {
   const title = clean(data?.title, 120);
   if (!title) return null;
@@ -30,7 +31,9 @@ export function cleanAnswer(data) {
     title,
     ...(/^\d{1,12}$/.test(bookId) && { bookId }),
     image: typeof data.image === 'string' && data.image.startsWith('https://') ? data.image : '',
-    series: seriesName ? { name: seriesName, number: clean(data.series.number, 12) } : null,
+    series: seriesName
+      ? { name: seriesName, number: clean(data.series.number, 12), ...(typeof data.series.url === 'string' && data.series.url.startsWith(SERIES_URL) && { url: data.series.url }) }
+      : null,
     author: authorName
       ? { name: authorName, url: typeof data.author.url === 'string' && data.author.url.startsWith(AUTHOR_URL) ? data.author.url : '' }
       : null,

@@ -1,6 +1,6 @@
 # The only network calls go to our own worker
 
-The optional book name and cover come from a small lookup service (`worker/`) that reads the Goodreads page's JSON-LD. The browser talks only to that worker, so the app works fully without it (empty `LOOKUP_URL`) and every failure can stay silent. Open Library and Google Books were left out, and there is no API key or `config.js`.
+The optional book name and cover come from a small lookup service (`worker/`) that reads the Goodreads page's JSON-LD, plus the series link under the title (the JSON-LD has no series field). The browser talks only to that worker, so the app works fully without it (empty `LOOKUP_URL`) and every failure can stay silent. Open Library and Google Books were left out, and there is no API key or `config.js`.
 
 ## Consequences
 

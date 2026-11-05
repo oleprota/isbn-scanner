@@ -21,7 +21,8 @@ const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 400_000; // the JSON-LD block is near the top of a ~1 MB page
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
-// Reads the page only until the JSON-LD block is complete, then drops the rest.
+// Reads the page only as far as the book's own heading section, then drops the rest: the JSON-LD block is at the top, and the
+// series link sits just before the title heading (about 50 KB in, `data-testid="bookTitle"`). Without that marker it reads up to MAX_BYTES.
 async function readHead(response) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -33,7 +34,7 @@ async function readHead(response) {
     bytes += value.length;
     html += decoder.decode(value, { stream: true });
     const marker = html.indexOf('application/ld+json');
-    if (marker !== -1 && html.indexOf('</script>', marker) !== -1) break;
+    if (marker !== -1 && html.indexOf('</script>', marker) !== -1 && html.includes('data-testid="bookTitle"')) break;
   }
   reader.cancel().catch(() => {});
   return html;
@@ -149,13 +150,13 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
       const isbn = normalizeIsbn(param('isbn'));
       if (!isValidIsbn(isbn)) return json({ error: 'invalid isbn' }, 400, 0, cors);
       kind = 'lookup';
-      key = `v8/${isbn}`; // v8: the Goodreads book id // v7: 404s carry a reason // v6: the first author, as listed
+      key = `v10/${isbn}`; // v10: the series from the page, its address (the title as before) // v9: (dropped: it cut titles) // v8: the Goodreads book id // v7: 404s carry a reason // v6: the first author, as listed
       work = () => pageAnswer(`https://www.goodreads.com/book/isbn/${isbn}`, parseLookup);
     } else if (url.pathname === '/book') {
       const id = param('id');
       if (!/^\d{1,12}$/.test(id)) return json({ error: 'invalid id' }, 400, 0, cors);
       kind = 'book';
-      key = `book3/${id}`; // book3: 404s carry a reason // book2: the whole answer with the ISBN, not the ISBN alone
+      key = `book5/${id}`; // book5: the series as in v10 // book3: 404s carry a reason // book2: the whole answer with the ISBN, not the ISBN alone
       work = () => pageAnswer(`https://www.goodreads.com/book/show/${id}`, parseEdition);
     } else if (url.pathname === '/search') {
       const query = param('q').slice(0, 100);
