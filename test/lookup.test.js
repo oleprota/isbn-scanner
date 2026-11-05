@@ -94,7 +94,14 @@ test('cleanAnswer passes a valid bookId through and reads answers without one', 
 
 test('gives up after the timeout', async () => {
   const slow = (url, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
-  assert.equal(await lookupBook('1', { url: URL_, fetchFn: slow, timeout: 20 }), null);
+  // AbortSignal.timeout() uses an unref'd timer and the fake fetch holds no socket, so without this the event loop looks idle
+  // and node:test cancels the test (and every one after it) while the answer is still pending.
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    assert.equal(await lookupBook('1', { url: URL_, fetchFn: slow, timeout: 20 }), null);
+  } finally {
+    clearInterval(keepAlive);
+  }
 });
 
 test('report also tells why: the worker\'s reason for a 404, the status of an error', async () => {
