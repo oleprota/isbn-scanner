@@ -97,6 +97,7 @@ export const card = {
   unmark: 'Прибрати з вибраного',
   linkTitle: (isbn, site) => `${isbn} на ${site}`,
   searchLinkTitle: (query, site) => `Шукати «${query}» на ${site}`,
+  pageLinkTitle: (title, site) => `«${title}» на ${site}`,
 };
 
 export const lists = {

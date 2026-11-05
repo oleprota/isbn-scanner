@@ -3,6 +3,9 @@
 // `gr:<n>` is a Goodreads book the user picked by title, possibly without an ISBN.
 export const isbnId = (isbn) => `isbn:${isbn}`;
 
+// A key is an id, or a bare ISBN (meaning `isbn:<isbn>`): the stores take either.
+export const toId = (key) => (key.includes(':') ? key : isbnId(key));
+
 const hasId = (e) => typeof e.id === 'string' && e.id !== '';
 // An entry is usable when it has an ISBN or an id.
 export const hasKey = (e) => !!e && (typeof e.isbn === 'string' || hasId(e));

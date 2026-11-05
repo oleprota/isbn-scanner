@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { loadSort, saveSort, sortBooks } from '../src/sort.js';
 
 const books = [
-  { isbn: '1', title: 'Яблуко' },
-  { isbn: '2', title: 'Apple' },
-  { isbn: '3', title: 'Банан' },
-  { isbn: '4', title: 'cherry' },
+  { id: '1', title: 'Яблуко' },
+  { id: '2', title: 'Apple' },
+  { id: '3', title: 'Банан' },
+  { id: '4', title: 'cherry' },
 ];
 const ratings = { 1: 3.5, 2: 4.7, 3: 0, 4: 3.5 };
-const ctx = (waiting = []) => ({ ratingOf: (isbn) => ratings[isbn] ?? 0, isWaiting: (isbn) => waiting.includes(isbn) });
-const order = (list) => list.map((b) => b.isbn).join('');
+const ctx = (waiting = []) => ({ ratingOf: (id) => ratings[id] ?? 0, isWaiting: (id) => waiting.includes(id) });
+const order = (list) => list.map((b) => b.id).join('');
 
 test('date keeps the list order', () => assert.equal(order(sortBooks(books, 'date', ctx())), '1234'));
 

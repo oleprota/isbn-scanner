@@ -34,8 +34,8 @@ test('storage saved before ids reads with derived ids and writes nothing back', 
   assert.equal(titles.of(B), 'Found B');
   assert.equal(titles.foundBy(B).id, isbnId(B));
   assert.equal(titles.details(B).id, isbnId(B));
-  assert.equal(titles.ratings().get(B), 4.5);
-  assert.equal(titles.allFoundBy().get(B).title, 'Picked B');
+  assert.equal(titles.ratings().get(isbnId(B)), 4.5);
+  assert.equal(titles.allFoundBy().get(isbnId(B)).title, 'Picked B');
   assert.equal(Object.values(stores).reduce((n, s) => n + s.writes, 0), 0);
   assert.equal(stores.scanned.read()[0].id, undefined);
 });

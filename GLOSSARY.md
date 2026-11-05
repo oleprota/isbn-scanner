@@ -9,7 +9,7 @@ What a search or scan shows for one book: its name, any details found, and links
 _Avoid_: Result, tile
 
 **Book**:
-Something known by its ISBN (or by the title it was found by), shown as a card or a row.
+Something known by its ISBN (or, with no ISBN yet, by the Goodreads page it was picked from), shown as a card or a row. Stores key it by an id: `isbn:<isbn>`, or `gr:<Goodreads id>` for a book picked by title.
 _Avoid_: Item, entry
 
 **Scanned**:
@@ -33,7 +33,7 @@ What the user typed for a book by tapping its title; it beats any found title.
 _Avoid_: Label, custom title
 
 **Found by title**:
-A book picked from the candidates for a typed title, so its site links search instead of using the ISBN.
+A book picked from the candidates for a typed title, so its site links go by title (Ereadian) and by its Goodreads page (Goodreads) instead of the ISBN. It is shown at once, with no ISBN needed.
 
 
 **Page book**:
