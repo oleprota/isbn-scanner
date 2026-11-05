@@ -21,4 +21,6 @@ Read `../verify-app/common.md` first (setup, closing check, report).
 
 7. **Thin ratings in rows.** Store details (mock the lookup) with rating counts 99 and 100: in both Scanned and Marked only the 99 row has a `.thin-warning` button (⚠, orange; a click opens the `.thin-popover` with `S.card.thinTitle(100)`, like the card's, and does not open the book; Escape or a tap outside closes it); the row stays one line at 360 px (the name is cut with an ellipsis) and the buttons keep their right edge.
 
+7b. **Storage saved before ids.** Seed `isbn-reader.scanned` and `isbn-reader.marked` with entries without `id` (`{"isbn":"9780141365466","title":"Matilda","addedAt":"2026-01-01T00:00:00.000Z"}`, a second from `test/fixtures/isbns.json`), plus `isbn-reader.names` and the found-by and details stores in their old shapes, then load `/`. Both lists show the rows as before (names, order, ★ on the marked one, no console errors) and a book's card opens from a row. Reading wrote nothing: the stored JSON still has no `id`. After starring or renaming one book, only that store gains `id` (`isbn:<isbn>`) on its entries; the app looks the same.
+
 Finish with the closing check from `common.md`.

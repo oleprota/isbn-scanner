@@ -102,7 +102,7 @@ test('the title and author a book was found by are kept, newest first, and clear
   assert.equal(titles.foundBy('1'), null);
   titles.setFoundBy('1', { title: '  Хірург ', author: 'Tess   Gerritsen' });
   titles.setFoundBy('2', { title: 'Other' });
-  assert.deepEqual(titles.foundBy('1'), { isbn: '1', title: 'Хірург', author: 'Tess Gerritsen' });
+  assert.deepEqual(titles.foundBy('1'), { id: 'isbn:1', isbn: '1', title: 'Хірург', author: 'Tess Gerritsen' });
   assert.equal(titles.foundBy('2').author, '');
   assert.deepEqual([...titles.allFoundBy().keys()], ['2', '1']);
   titles.clearFoundBy('1');

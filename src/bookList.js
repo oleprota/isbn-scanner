@@ -1,14 +1,16 @@
 // A list of books by ISBN, newest first, persisted through a list store. Used for both the
 // "Scanned" list (everything looked up) and the "Marked" list (the ones picked from it).
 // Entries saved by earlier versions may carry extra fields (authors, ...); they are kept.
-export const isBookEntry = (e) => e && typeof e.isbn === 'string' && typeof e.title === 'string';
+import { hasKey, withId, rekeyList } from './bookId.js';
+
+export const isBookEntry = (e) => hasKey(e) && typeof e.title === 'string';
 
 export const LIST_LIMIT = 1000;
 
 // At most `limit` books are kept. A full list refuses new books (add and bump return false and
 // change nothing) until some are removed; books already listed can still be moved or renamed.
 export function createBookList(store, limit = LIST_LIMIT) {
-  const read = () => store.read().filter(isBookEntry).slice(0, limit);
+  const read = () => store.read().filter(isBookEntry).slice(0, limit).map(withId);
 
   return {
     list: read,
@@ -38,6 +40,11 @@ export function createBookList(store, limit = LIST_LIMIT) {
     // Changes the title of a listed book (e.g. after the user names an unknown one).
     rename(isbn, title) {
       store.write(read().map((e) => (e.isbn === isbn ? { ...e, title } : e)));
+    },
+    // `isbn:X` becomes `gr:N`; a duplicate already listed as `gr:N` is merged (see rekeyList).
+    rekey(fromId, toId) {
+      const next = rekeyList(read(), fromId, toId, (_from, to) => to);
+      if (next) store.write(next);
     },
     clear() {
       store.write([]);

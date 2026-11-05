@@ -15,14 +15,15 @@ import { createKeyed } from './keyed.js';
 import { cleanText } from './text.js';
 import { card } from './strings.js';
 import { isThin } from './lookup.js';
+import { hasKey } from './bookId.js';
 
 export const DETAILS_VERSION = 5;
 export const NAME_MAX = 120;
 const AUTHOR_MAX = 100;
 
-const isName = (e) => e && typeof e.isbn === 'string' && typeof e.name === 'string';
-const isFoundBy = (e) => e && typeof e.isbn === 'string' && typeof e.title === 'string' && typeof e.author === 'string';
-const isDetails = (e) => e && typeof e.isbn === 'string' && typeof e.title === 'string';
+const isName = (e) => hasKey(e) && typeof e.name === 'string';
+const isFoundBy = (e) => hasKey(e) && typeof e.title === 'string' && typeof e.author === 'string';
+const isDetails = (e) => hasKey(e) && typeof e.title === 'string';
 
 export function createBookTitles({ names, foundBy, details, lists, limit = 1000 }) {
   const typed = createKeyed(names, isName, limit);
@@ -55,7 +56,9 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
     },
 
     details: (isbn) => looked.get(isbn),
-    detailsCurrent: (isbn) => looked.get(isbn)?.v === DETAILS_VERSION,
+    // current = the shape the app writes now and complete; partial = saved before the lookup finished (`partial: true`)
+    detailsCurrent: (isbn) => { const d = looked.get(isbn); return d?.v === DETAILS_VERSION && !d.partial; },
+    detailsPartial: (isbn) => looked.get(isbn)?.partial === true,
     // isbn -> rating value, for the books that have one (the lists show it)
     ratings: () => new Map(looked.all().filter((e) => e.rating).map((e) => [e.isbn, e.rating.value])),
     // isbns whose rating is thin (the lists mark them)
@@ -64,10 +67,10 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
     // earlier lookup of this book gave (older versions kept the series bracket in it): never a typed name or
     // another title. Rows in the lists are replaced that way; the returned `replaces(title)` tells the same
     // for a title shown elsewhere (the card).
-    setDetails(isbn, answer) {
+    setDetails(isbn, answer, { partial = false } = {}) {
       const earlier = looked.get(isbn)?.title;
       const replaces = (title) => title === card.isbnTitle(isbn) || title === earlier;
-      looked.put({ ...answer, isbn, v: DETAILS_VERSION });
+      looked.put({ ...answer, isbn, v: DETAILS_VERSION, ...(partial && { partial: true }) });
       retitle(isbn, answer.title, replaces);
       return replaces;
     },
@@ -81,5 +84,14 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
       else pickedBy.remove(isbn);
     },
     clearFoundBy: (isbn) => pickedBy.remove(isbn),
+
+    // `isbn:X` becomes `gr:N` everywhere, merging a book already stored as `gr:N`: it stays starred if either was,
+    // keeps a typed name (the `gr:N` one wins) and the older list position. Other re-keys are refused.
+    rekey(fromId, toId) {
+      for (const list of lists) list.rekey(fromId, toId);
+      typed.rekey(fromId, toId);
+      pickedBy.rekey(fromId, toId);
+      looked.rekey(fromId, toId, (from, to) => (to.partial && !from.partial ? from : to));
+    },
   };
 }
