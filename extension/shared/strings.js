@@ -64,6 +64,8 @@ export const card = {
   // the title of a book that has no name (also stored with the lists, so keep it stable)
   isbnTitle: (isbn) => `ISBN ${isbn}`,
   refresh: 'Оновити дані книги',
+  refreshWait: 'Оновлювати можна раз на хвилину', // the tooltip while waiting
+  refreshIn: (seconds) => `Оновлювати можна раз на хвилину. Спробуйте за ${seconds} с`, // the popover on a tap
   ratingLabel: 'Рейтинг на Goodreads',
   ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
   thinTitle: (threshold) => `Менше ${threshold} оцінок — рейтинг ненадійний`, // the warning icon's popover and tooltip
@@ -88,10 +90,7 @@ export const card = {
     return why[outcome === 'missing' ? reason : outcome] ?? why['no-reason'];
   },
   isbnLabel: 'ISBN',
-  isbnLooking: 'Шукаю ISBN…',
   isbnNotFound: '(не знайдено)',
-  isbnRetry: 'Спробувати ще раз',
-  isbnRetryTitle: (why) => (why ? `Спробувати ще раз. ${why}` : 'Спробувати ще раз'),
   seriesLabel: 'Серія',
   authorLabel: 'Автор',
   nameLabel: 'Назва книги',

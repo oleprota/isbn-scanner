@@ -19,6 +19,10 @@ import { hasKey, isId, matchesKey, toId } from './bookId.js';
 
 export const DETAILS_VERSION = 8; // 8: asked again once, to get the series' own page address (7 cut titles: dropped) // 6: the Goodreads book id (`isbn:X` becomes `gr:N`)
 export const NAME_MAX = 120;
+
+// A refreshed answer over what is stored: a field the answer lacks keeps its stored value (a refresh never blanks one).
+const FIELDS = ['title', 'image', 'series', 'author', 'rating'];
+export const keepKnown = (found, earlier) => (earlier ? { ...found, ...Object.fromEntries(FIELDS.filter((f) => !found[f] && earlier[f]).map((f) => [f, earlier[f]])) } : found);
 const AUTHOR_MAX = 100;
 
 const isName = (e) => hasKey(e) && typeof e.name === 'string';

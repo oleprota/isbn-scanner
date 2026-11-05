@@ -9,7 +9,7 @@ import { createRefreshGate } from './refreshGate.js';
 import { createListStore } from './storage.js';
 import { bucket, createStats, describeClient } from './stats.js';
 import { createBookList } from './bookList.js';
-import { NAME_MAX, createBookTitles } from './bookTitles.js';
+import { NAME_MAX, createBookTitles, keepKnown } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
 import { coverImage, factsBlock, isbnRows, ratingBlock } from './details.js';
@@ -269,13 +269,8 @@ function renderBook(book) {
   const refresh = () => {
     const found = titles.details(book.id);
     const isbn = book.isbn ?? found?.isbn;
-    facts.replaceChildren(factsBlock(found ?? {}, isbnRows({
-      isbn,
-      running: editionsRunning.has(book.id),
-      failed: Boolean(self.failure),
-      why: self.failure && str.card.lookupWhy(self.failure),
-      retry: () => requestEdition(book.id, { retry: true }),
-    })));
+    const block = factsBlock(found ?? {}, isbnRows({ isbn, failed: Boolean(self.failure), why: self.failure && str.card.lookupWhy(self.failure) }));
+    facts.replaceChildren(...(block.hasChildNodes() ? [block] : [])); // nothing known: no empty block
     links.replaceChildren(...isbnLinks(isbn, titles.foundBy(book.id)).map((link) => linkButton(link, { big: true })));
   };
   // what the lookup found: the cover beside the title, the rating under it, then the rest
@@ -290,8 +285,22 @@ function renderBook(book) {
   const refreshButton = iconButton('\u21BB\uFE0E', str.card.refresh); // ↻
   refreshButton.classList.add('refresh');
   refreshButton.hidden = !LOOKUP_URL;
+  // not `disabled` (it swallows taps): a tap while it is unavailable says why in a popover (same look as the thin-rating one)
+  const note = el('div', null, 'thin-popover');
+  note.popover = 'auto';
+  let noteTimer;
+  const say = (text) => {
+    note.textContent = text;
+    const at = refreshButton.getBoundingClientRect();
+    note.style.top = `${at.bottom + 6}px`;
+    note.style.left = `${Math.max(8, Math.min(at.right - 224, innerWidth - 224 - 8))}px`;
+    note.showPopover();
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => note.matches(':popover-open') && note.hidePopover(), 3000);
+  };
   refreshButton.addEventListener('click', () => {
-    if (!refreshGate.ready() || pending.has(book.id) || editionsRunning.has(book.id)) return; // a request already out: nothing to ask, keep the minute
+    if (pending.has(book.id) || editionsRunning.has(book.id)) return say(str.search.lookingUp); // a request already out: nothing to ask, keep the minute
+    if (!refreshGate.ready()) return say(str.card.refreshIn(Math.ceil(refreshGate.left() / 1000)));
     refreshGate.start();
     stats.track('refresh', { by_title: book.id.startsWith('gr:') ? 1 : 0 });
     if (book.id.startsWith('gr:')) requestEdition(book.id, { retry: true, fresh: true });
@@ -299,9 +308,17 @@ function renderBook(book) {
     shown?.syncRefresh();
     setTimeout(() => shown?.syncRefresh(), refreshGate.left()); // every card's button opens again together
   });
-  const syncRefresh = () => { refreshButton.disabled = !refreshGate.ready(); };
+  // a spinner while its request runs; dimmed with a tooltip while the minute's wait is on
+  const syncRefresh = () => {
+    const running = pending.has(book.id) || editionsRunning.has(book.id);
+    const ready = refreshGate.ready();
+    refreshButton.setAttribute('aria-disabled', String(running || !ready));
+    refreshButton.classList.toggle('busy', running);
+    refreshButton.replaceChildren(running ? spinner(str.search.lookingUp) : '\u21BB\uFE0E');
+    refreshButton.title = running ? str.search.lookingUp : ready ? str.card.refresh : str.card.refreshWait;
+  };
   syncRefresh();
-  head.append(body, refreshButton, markToggle.create(book));
+  head.append(body, refreshButton, note, markToggle.create(book));
   setDetails(titles.details(book.id));
   card.append(head, facts, links);
   result.replaceChildren(card);
@@ -312,7 +329,7 @@ function renderBook(book) {
 // "Додано" never wait for it, and a failure is silent. One request per ISBN per page load.
 const asked = new Set();
 const pending = new Set(); // asked and not answered yet: its card shows a spinner beside the title
-const editionsRunning = new Set(); // books picked by title whose edition request is out (asked again at every card until it answers)
+const editionsRunning = new Set(); // books picked by title whose edition request is out (asked at the pick and by the ↻ button)
 
 // `fresh`: the user's refresh button; it asks again even when the details are current, and skips the service's caches.
 function requestMeta(isbn, { fresh = false } = {}) {
@@ -323,13 +340,13 @@ function requestMeta(isbn, { fresh = false } = {}) {
   pending.add(id);
   if (fresh && shownCard(id)) shown.setWaiting(true);
   renderLists(); // the rows of this book show the spinner too (several lookups can run at once while scanning)
-  lookupBook(isbn, { fresh, report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
+  return lookupBook(isbn, { fresh, report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
     pending.delete(id);
-    if (found) return applyLookup(id, isbn, found);
+    if (found) return applyLookup(id, isbn, fresh ? keepKnown(found, titles.details(id)) : found);
     asked.delete(id); // nothing changed: the next card of this book asks again
     if (shownCard(id)) shown.setWaiting(false);
     renderLists();
-  });
+  }).finally(() => shown?.syncRefresh()); // the ↻ stops spinning, whoever started the request
 }
 
 // The answer for an ISBN: when it carries the Goodreads book id, the book `isbn:X` becomes `gr:N` (merging a book already
@@ -353,25 +370,25 @@ function applyLookup(id, isbn, { bookId, ...found }) {
 // The edition request of a book picked by title (`gr:<n>`), in the background: its card and row are already there.
 // The answer replaces the partial details with current ones and stores the ISBN (not shown yet); a book already
 // known by that ISBN is merged into this one. A failure never blocks anything: the card shows "(не знайдено)" with
-// a button (`retry`: the user's) and nothing is remembered, so every card built for the book asks again.
+// the ↻ refresh button (`retry`: the user's) and nothing is remembered. Only the pick and that button ask.
 // The answer is reported once to the usage stats (`isbn_found`).
 function requestEdition(id, { retry = false, fresh = false } = {}) {
   if (!LOOKUP_URL || editionsRunning.has(id) || (!fresh && titles.detailsCurrent(id) && titles.details(id).isbn)) return;
   editionsRunning.add(id);
   let why = {};
   if (shownCard(id)) shown.refresh();
-  editionOfBook(id.slice(3), { fresh, report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
+  return editionOfBook(id.slice(3), { fresh, report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
     editionsRunning.delete(id);
     stats.track('isbn_found', { found: edition ? 1 : 0, result: why.outcome, reason: why.reason, ms: why.ms, retry: retry ? 1 : 0, details: edition?.found ? 1 : 0 });
     if (shownCard(id)) shown.failure = edition ? null : why;
     if (edition) {
       titles.rekey(isbnId(edition.isbn), id);
-      if (edition.found) applyMeta(id, edition.found, edition.isbn);
+      if (edition.found) applyMeta(id, fresh ? keepKnown(edition.found, titles.details(id)) : edition.found, edition.isbn);
       else if (titles.details(id) && !(fresh && titles.detailsCurrent(id))) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
     }
     if (shownCard(id)) shown.refresh();
     renderLists();
-  });
+  }).finally(() => shown?.syncRefresh());
 }
 
 const shownCard = (id) => shown?.book.id === id && result.contains(shown.card);
@@ -659,7 +676,7 @@ function pickCandidate(candidate) {
   input.blur();
 }
 
-// A listed book with no ISBN is shown again from what is stored; its edition is asked again until it has answered.
+// A listed book with no ISBN is shown again from what is stored; its edition is not asked again (the card's ↻ does).
 // `push: false`: the card comes from the address itself (load, Back/Forward), so no history entry is added.
 function showPicked(entry, { push = true } = {}) {
   pickToken++;
@@ -670,7 +687,6 @@ function showPicked(entry, { push = true } = {}) {
   if (push && grFromHash(location.hash) !== entry.id.slice(3)) history.pushState(null, '', hashForGr(entry.id.slice(3)));
   const book = { id: entry.id, title: titles.of(entry.id) };
   noteShown(book);
-  requestEdition(book.id);
   renderBook(book);
   input.blur();
 }

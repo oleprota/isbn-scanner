@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBookTitles } from '../src/bookTitles.js';
+import { createBookTitles, keepKnown } from '../src/bookTitles.js';
 import { createBookList } from '../src/bookList.js';
 
 const memoryStore = (initial = []) => {
@@ -140,4 +140,12 @@ test('a refresh renames a book that was titled by the earlier lookup', () => {
   titles.setDetails('1', found('New'));
   assert.equal(titles.of('1'), 'New');
   assert.equal(scanned.list()[0].title, 'New');
+});
+
+test('keepKnown: an empty field of a refreshed answer never replaces a filled one', () => {
+  const earlier = { title: 'Old', image: 'https://i/1.jpg', series: { name: 'S', number: '1' }, author: { name: 'A', url: 'u' }, rating: { value: 4, count: 900 }, v: 8 };
+  const now = { title: 'New', image: '', series: null, author: null, rating: { value: 3.5, count: 950 } };
+  assert.deepEqual(keepKnown(now, earlier), { title: 'New', image: earlier.image, series: earlier.series, author: earlier.author, rating: now.rating });
+  assert.deepEqual(keepKnown(now, undefined), now);
+  assert.equal(keepKnown({ ...now, title: '' }, earlier).title, 'Old');
 });
