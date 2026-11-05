@@ -15,9 +15,10 @@ const MISSING_SECONDS = 24 * 3600; // Goodreads said 404: it really doesn't know
 const SEARCH_SECONDS = 24 * 3600; // a title search with results
 const UNSURE_SECONDS = 60; // anything else (an empty 202, a block, an error): ask again soon
 const QUERY_WORD_DROP_TRIES = 3;
-const RETRY_202_TRIES = 4;
-const RETRY_DELAY_MS = 1500;
-const FETCH_TIMEOUT_MS = 5000;
+const RETRY_202_TRIES = 3;
+const RETRY_DELAY_MS = 2000;
+const FETCH_TIMEOUT_MS = 5000; // the search-as-you-type JSON, which is quick
+const PAGE_BUDGET_MS = 15000; // one book page, all its tries and pauses together (a popular page can take 9 s to start); the app waits a little longer (TIMEOUT_MS in src/lookup.js)
 const MAX_BYTES = 400_000; // the JSON-LD block is near the top of a ~1 MB page
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
@@ -41,18 +42,21 @@ async function readHead(response) {
 }
 
 // Goodreads sometimes answers an empty 202 for a page it has not built yet and serves the full page
-// a moment later, so a 202 is asked again, up to RETRY_202_TRIES times in all, RETRY_DELAY_MS apart. Returns { found } (what `parse` made of the page) or
+// a moment later, so a 202 is asked again, up to RETRY_202_TRIES times in all, RETRY_DELAY_MS apart, all within `budgetMs`. Returns { found } (what `parse` made of the page) or
 // { miss, certain, why }: `certain` only when Goodreads answered 404, so that a hiccup is never remembered as "no such book". `why` is the reason the
 // app words (src/strings.js): page-404, page-empty (an empty 202), page-refused (403/429), page-down (timeout, network, other status), page-no-book (a page without book data).
-async function fromGoodreads(pageUrl, parse, fetchFn, wait) {
+async function fromGoodreads(pageUrl, parse, fetchFn, wait, budgetMs) {
+  const deadline = Date.now() + budgetMs;
   let miss = 'no answer';
   let why = 'page-down';
   for (let attempt = 0; attempt < RETRY_202_TRIES; attempt++) {
+    const left = deadline - Date.now();
+    if (left <= 0) break; // the budget went on the earlier tries and pauses
     try {
       const response = await fetchFn(pageUrl, {
         headers: { 'user-agent': USER_AGENT, accept: 'text/html' },
         redirect: 'follow',
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(left),
       });
       if (response.status === 404) return { miss: 'status 404', certain: true, why: 'page-404' };
       miss = `status ${response.status}`;
@@ -127,7 +131,7 @@ async function record(request, env, ctx, cors) {
 }
 
 // `fetchFn` and `cache` are parameters so that tests don't touch the network.
-export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) }) {
+export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), budgetMs = PAGE_BUDGET_MS }) {
   return async function handle(request, env = {}, ctx) {
     const origin = request.headers.get('origin');
     if (origin && !ALLOWED_ORIGINS.includes(origin)) return new Response('Forbidden', { status: 403 });
@@ -173,7 +177,7 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
 
     async function pageAnswer(pageUrl, parse) {
       const started = Date.now();
-      const { found, miss, certain, why } = await fromGoodreads(pageUrl, parse, fetchFn, wait);
+      const { found, miss, certain, why } = await fromGoodreads(pageUrl, parse, fetchFn, wait, budgetMs);
       note('upstream', { kind, result: found ? 'found' : why, ms: Date.now() - started });
       return found
         ? json(found, 200, FOUND_SECONDS)

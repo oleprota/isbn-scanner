@@ -7,6 +7,7 @@ A tiny Cloudflare Worker with three read paths and one for usage stats (`POST /e
 - The cache key carries a version (`v10` in `index.js`): change it whenever the answer's shape changes, so old cached answers are not served.
 - Answers are cached: 7 days for a found book, 1 day when Goodreads answers 404, and only 1 minute for any other miss (an empty 202, a block, an error), so a hiccup is not remembered as "no such book". A 202 is asked again, up to 4 tries in all, 1.5 s apart. A miss carries an `x-miss-reason` header (`curl -i` shows why).
 - New (uncached) lookups are limited to 20 per 10 seconds per address (`wrangler.toml`). Past that the answer is 429, and the app waits 5 s and asks again (up to 3 times).
+- One Goodreads page call (all its tries and pauses) has a 15 s budget (`PAGE_BUDGET_MS`): popular pages take about 9 s to start answering. The app waits 20 s (`TIMEOUT_MS` in `src/lookup.js`). The search-as-you-type call keeps a 5 s limit.
 - Free plan: 100,000 requests a day, 10 ms CPU each. Past the limit requests fail (the app then just shows `ISBN <number>`); nothing is billed unless you upgrade to a paid plan.
 - Where it is deployed: https://isbn-lookup.oleprota.workers.dev (Cloudflare account of oleprota@gmail.com, worker `isbn-lookup`; first deployed 2026-10-26).
 

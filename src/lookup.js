@@ -6,7 +6,7 @@ import { isValidIsbn, normalizeIsbn } from './isbn.js';
 import { cleanText as clean } from './text.js';
 
 export const LOOKUP_URL = 'https://isbn-lookup.oleprota.workers.dev'; // the deployed worker (worker/README.md); '' turns the lookup off
-const TIMEOUT_MS = 10000; // Goodreads pages sometimes take 4 s or more, and the worker may ask twice (an empty 202)
+const TIMEOUT_MS = 20000; // a little over the worker's budget for one Goodreads page (PAGE_BUDGET_MS in worker/index.js, 15 s: popular pages take 9 s to start)
 const SEARCH_TIMEOUT_MS = 12000; // the worker may ask Goodreads up to 4 times in a row (it drops words while nothing is found)
 const SHAPE = 10; // the answer's shape, same as `v10` in worker/index.js: it keeps the browser's HTTP cache from serving an answer of an older shape
 const BUSY_WAIT_MS = 5000; // the worker answered 429 (too many lookups at once): the request waits and goes again

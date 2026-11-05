@@ -85,7 +85,7 @@ test('a 202 is asked again, and the full page that follows is the answer', async
 test('a 202 that never ends is given up after RETRY_202_TRIES tries', async () => {
   const { get, calls } = setup(goodreads('', 202));
   assert.equal((await get(`?isbn=${ISBN}`)).status, 404);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 3);
 });
 
 test('only a real 404 is remembered for a day; doubtful misses are asked again after a minute', async () => {
@@ -278,4 +278,37 @@ test('the series link comes after the JSON-LD, tens of KB into the page, and is 
   const { get } = setup(goodreads(chunked(page('Перша дівчинка. Хроніки Сейлока. Книга 1'))));
   const body = await (await get(`?isbn=${ISBN}`)).json();
   assert.deepEqual([body.title, body.series], ['Перша дівчинка. Хроніки Сейлока. Книга 1', { name: 'The Chronicles of Saylok', number: '1', url: 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok' }]);
+});
+
+// One budget for the whole Goodreads page call (all tries and pauses), not a timeout per try.
+const withBudget = (fetchFn, budgetMs) => createHandler({ fetchFn, cache: memoryCache(), wait: async () => {}, budgetMs });
+const lookup = (handle) => handle(new Request(`https://worker.test/lookup?isbn=${ISBN}`, { headers: { origin: ORIGIN } }));
+
+test('a page that never answers is given up at the budget, as page-down', async () => {
+  const hangs = (url, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+  const started = Date.now();
+  const response = await lookup(withBudget(hangs, 50));
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { reason: 'page-down' });
+  assert.ok(Date.now() - started < 1000);
+});
+
+test('slow empty 202s stop at the budget, before RETRY_202_TRIES', async () => {
+  let tries = 0;
+  const slow202 = async () => {
+    tries++;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    return new Response('', { status: 202 });
+  };
+  const response = await lookup(withBudget(slow202, 100));
+  assert.deepEqual(await response.json(), { reason: 'page-empty' });
+  assert.ok(tries < 4, `asked ${tries} times`);
+});
+
+test('a slow page that answers inside the budget is the answer', async () => {
+  const slowPage = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    return goodreads()();
+  };
+  assert.equal((await lookup(withBudget(slowPage, 1000))).status, 200);
 });
