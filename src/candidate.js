@@ -1,3 +1,4 @@
+import { grId } from './bookId.js';
 // What a title-search candidate (src/lookup.js `cleanResults`) tells about its book, as the details the card is
 // built from before the edition answer comes: the same shape as a lookup answer, saved with `partial: true`.
 // A series is read from the title when it carries one ("Dune (Dune, #1)").
@@ -16,4 +17,4 @@ export function detailsFromCandidate(candidate) {
 }
 
 // The id of a book picked from the candidates: it has no ISBN until the edition answer says one.
-export const candidateId = (candidate) => `gr:${candidate.id}`;
+export const candidateId = (candidate) => grId(candidate.id);

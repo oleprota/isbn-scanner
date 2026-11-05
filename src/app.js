@@ -683,7 +683,9 @@ function search(isbn, { push = true, move = true, via = 'typed' } = {}) {
   result.replaceChildren();
   stats.track('search', { via, ok: isValidIsbn(isbn) ? 1 : 0 });
   if (!isValidIsbn(isbn)) return setStatus(str.search.invalidIsbn, true);
-  if (move) titles.clearFoundBy(titles.idOf(isbn)); // a search by ISBN clears the title a book was once found by
+  const id = titles.idOf(isbn);
+  // a search by ISBN clears the title an `isbn:` book was once found by; a `gr:` book keeps its Goodreads page address (better than an ISBN link)
+  if (move && id.startsWith('isbn:')) titles.clearFoundBy(id);
   if (push && isbnFromHash(location.hash) !== isbn) history.pushState(null, '', hashForIsbn(isbn));
 
   const book = isbnBook(isbn);
@@ -703,11 +705,11 @@ async function showGrLink(num) {
   if (!LOOKUP_URL) return;
   const token = ++pickToken;
   const edition = await editionOfBook(num);
-  if (token !== pickToken || !edition?.found) return;
+  if (!edition?.found) return;
   titles.rekey(isbnId(edition.isbn), id); // the same book already stored by its ISBN is merged into this one
   titles.setFoundBy(id, { title: edition.found.title, author: edition.found.author?.name, url: `https://www.goodreads.com/book/show/${num}` });
   titles.setDetails(id, edition.found, { isbn: edition.isbn });
-  showPicked({ id }, { push: false });
+  if (token === pickToken) showPicked({ id }, { push: false }); // the answer is kept either way; the card only if nothing newer replaced it
 }
 
 window.addEventListener('popstate', () => {

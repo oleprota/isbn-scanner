@@ -15,7 +15,7 @@ import { createKeyed } from './keyed.js';
 import { cleanText } from './text.js';
 import { card } from './strings.js';
 import { isThin } from './lookup.js';
-import { hasKey, matchesKey, toId } from './bookId.js';
+import { hasKey, isId, matchesKey, toId } from './bookId.js';
 
 export const DETAILS_VERSION = 8; // 8: asked again once, to get the series' own page address (7 cut titles: dropped) // 6: the Goodreads book id (`isbn:X` becomes `gr:N`)
 export const NAME_MAX = 120;
@@ -42,7 +42,7 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
   };
   // the stores take an id, or a bare ISBN for `isbn:<isbn>`
   // (a bare ISBN also finds the book if it was upgraded to `gr:<n>`)
-  const idOf = (key) => (key.includes(':') ? key : [...lists.flatMap((l) => l.list()), ...looked.all()].find((e) => matchesKey(e, key))?.id ?? toId(key));
+  const idOf = (key) => (isId(key) ? key : [...lists.flatMap((l) => l.list()), ...looked.all()].find((e) => matchesKey(e, key))?.id ?? toId(key));
   const of = (key) => ofId(idOf(key));
   const fallback = (key) => fallbackOf(idOf(key));
 
@@ -102,11 +102,11 @@ export function createBookTitles({ names, foundBy, details, lists, limit = 1000 
 
     // `isbn:X` becomes `gr:N` everywhere, merging a book already stored as `gr:N`: it stays starred if either was,
     // keeps a typed name (the `gr:N` one wins) and the older list position. Other re-keys are refused.
-    rekey(fromId, toId) {
-      for (const list of lists) list.rekey(fromId, toId);
-      typed.rekey(fromId, toId);
-      pickedBy.rekey(fromId, toId);
-      looked.rekey(fromId, toId, (from, to) => (to.partial && !from.partial ? from : to));
+    rekey(fromId, newId) {
+      for (const list of lists) list.rekey(fromId, newId);
+      typed.rekey(fromId, newId);
+      pickedBy.rekey(fromId, newId);
+      looked.rekey(fromId, newId, (from, to) => (to.partial && !from.partial ? from : to));
     },
   };
 }

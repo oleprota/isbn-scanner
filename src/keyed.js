@@ -15,8 +15,8 @@ export function createKeyed(store, valid, limit = 1000) {
     all: list,
     get: (key) => list().find((e) => matchesKey(e, key)) ?? null,
     put: (entry) => store.write([full(entry), ...others(full(entry).id)].slice(0, limit)),
-    rekey(fromId, toId, merge) {
-      const next = rekeyList(list(), fromId, toId, merge);
+    rekey(fromId, newId, merge) {
+      const next = rekeyList(list(), fromId, newId, merge);
       if (next) store.write(next);
     },
     remove: (key) => store.write(others(key)),

@@ -1,7 +1,7 @@
 // A list of books by ISBN, newest first, persisted through a list store. Used for both the
 // "Scanned" list (everything looked up) and the "Marked" list (the ones picked from it).
 // Entries saved by earlier versions may carry extra fields (authors, ...); they are kept.
-import { hasKey, matchesKey, toId, withId, rekeyList } from './bookId.js';
+import { hasKey, isbnId, matchesKey, toId, withId, rekeyList } from './bookId.js';
 
 export const isBookEntry = (e) => hasKey(e) && typeof e.title === 'string';
 
@@ -9,7 +9,7 @@ export const LIST_LIMIT = 1000;
 
 // At most `limit` books are kept. A full list refuses new books (add and bump return false and
 // change nothing) until some are removed; books already listed can still be moved or renamed.
-const newEntry = ({ id, isbn, title }, now) => ({ id: withId({ id, isbn }).id, ...(isbn && { isbn }), title, addedAt: now.toISOString() });
+const newEntry = ({ id, isbn, title }, now) => ({ id: id || isbnId(isbn), ...(isbn && { isbn }), title, addedAt: now.toISOString() });
 
 export function createBookList(store, limit = LIST_LIMIT) {
   const read = () => store.read().filter(isBookEntry).slice(0, limit).map(withId);
@@ -47,8 +47,8 @@ export function createBookList(store, limit = LIST_LIMIT) {
       store.write(read().map((e) => (e.id === toId(key) ? { ...e, title } : e)));
     },
     // `isbn:X` becomes `gr:N`; a duplicate already listed as `gr:N` is merged (see rekeyList).
-    rekey(fromId, toId) {
-      const next = rekeyList(read(), fromId, toId, (_from, to) => to);
+    rekey(fromId, newId) {
+      const next = rekeyList(read(), fromId, newId, (_from, to) => to);
       if (next) store.write(next);
     },
     clear() {
