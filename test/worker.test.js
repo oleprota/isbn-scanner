@@ -34,7 +34,7 @@ test('returns the book and allows the app origin', async () => {
   const response = await get(`?isbn=${ISBN}`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('access-control-allow-origin'), ORIGIN);
-  assert.deepEqual(await response.json(), { title: 'Title', series: null, author: { name: 'A', url: 'https://www.goodreads.com/author/show/1.A' }, rating: { value: 4.5, count: 10 }, image: 'https://m.media-amazon.com/a.jpg' });
+  assert.deepEqual(await response.json(), { title: 'Title', series: null, author: { name: 'A', url: 'https://www.goodreads.com/author/show/1.A' }, rating: { value: 4.5, count: 10 }, image: 'https://m.media-amazon.com/a.jpg', bookId: '1' });
   assert.deepEqual(calls, [`https://www.goodreads.com/book/isbn/${ISBN}`]);
 });
 
@@ -249,4 +249,14 @@ test('each real Goodreads fetch leaves an upstream row, a cache hit a cache_hit 
   assert.deepEqual([JSON.parse(saved[0][4]).kind, JSON.parse(saved[0][4]).result, JSON.parse(saved[1][4])], ['lookup', 'page-refused', { kind: 'lookup' }]);
   await handler(new Request('https://worker.test/search?q=dune', { headers: { origin: ORIGIN } }), env, ctx);
   assert.deepEqual([saved[2][3], JSON.parse(saved[2][4]).kind, JSON.parse(saved[2][4]).result, JSON.parse(saved[2][4]).tries], ['upstream', 'search', 'failed', 1]);
+});
+
+test('/lookup carries the book id of the redirect address, /book does not, and no id is omitted', async () => {
+  const at = (url) => () => Object.defineProperty(new Response(html), 'url', { value: url });
+  const lookup = await setup(at('https://www.goodreads.com/book/show/4214.Life_of_Pi')).get(`?isbn=${ISBN}`);
+  assert.equal((await lookup.json()).bookId, '4214');
+  const none = await setup(at('https://www.goodreads.com/search?q=x')).get(`?isbn=${ISBN}`);
+  assert.equal('bookId' in (await none.json()), false);
+  const book = await setup(at('https://www.goodreads.com/book/show/4214')).request('/book?id=4214');
+  assert.equal('bookId' in (await book.json()), false);
 });

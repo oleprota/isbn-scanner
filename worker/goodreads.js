@@ -113,3 +113,16 @@ export function parseEdition(html) {
   const details = readBook(book);
   return details && isValidIsbn(isbn) ? { isbn, ...details } : null;
 }
+
+// The Goodreads book id in the address a page was finally served from (".../book/show/4214.Life_of_Pi"), or ''.
+export function bookIdFromUrl(url) {
+  const match = /^https:\/\/www\.goodreads\.com\/book\/show\/(\d{1,12})(?![\d])/.exec(url ?? '');
+  return match ? match[1] : '';
+}
+
+// `parseBook` plus `bookId` (from the address after Goodreads' redirect), when that address has one.
+export function parseLookup(html, finalUrl) {
+  const book = parseBook(html);
+  const bookId = bookIdFromUrl(finalUrl);
+  return book && bookId ? { ...book, bookId } : book;
+}

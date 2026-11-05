@@ -27,7 +27,7 @@ test('returns the cleaned answer and asks for the ISBN', async () => {
     fetchFn: async (url) => { requested = url; return answer(full)(); },
   });
   assert.deepEqual(found, { ...full, title: 'Шлях королів' });
-  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=7`);
+  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=8`);
 });
 
 test('an answer with only a title is fine; missing parts are empty', async () => {
@@ -82,6 +82,12 @@ test('the ISBN of a picked book is asked from /book and checked', async () => {
   assert.equal(requested, `${URL_}/book?id=32740697`);
   for (const body of [{ isbn: '9786171299413', title: 'T' }, { isbn: 5 }, {}]) assert.equal(await editionOfBook('1', { url: URL_, fetchFn: answer(body) }), null);
   assert.equal(await editionOfBook('1', { url: URL_, fetchFn: answer({}, 404) }), null);
+});
+
+test('cleanAnswer passes a valid bookId through and reads answers without one', () => {
+  assert.equal(cleanAnswer({ title: 'T', bookId: '4214' }).bookId, '4214');
+  assert.equal('bookId' in cleanAnswer({ title: 'T' }), false);
+  assert.equal('bookId' in cleanAnswer({ title: 'T', bookId: '<b>' }), false);
 });
 
 test('gives up after the timeout', async () => {

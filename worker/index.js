@@ -1,11 +1,11 @@
 // ISBN lookup service, for the app (a browser page can't read Goodreads: no CORS headers there):
-//   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image} or 404 {reason}
+//   GET /lookup?isbn=<isbn>  -> {title, series, author, rating, image, bookId?} or 404 {reason}
 //   GET /search?q=<title>    -> {results: [{id, title, author, image}]} (up to 5)
 //   GET /book?id=<book id>   -> {isbn, title, series, author, rating, image} of that Goodreads edition, or 404 {reason}
 //   POST /event              -> 204; a batch of anonymous usage events, kept in D1 when it is set up (events.js)
 // Runs as a Cloudflare Worker, see README.md in this folder.
 import { isValidIsbn, normalizeIsbn } from '../src/isbn.js';
-import { parseBook, parseCandidates, parseEdition } from './goodreads.js';
+import { parseLookup, parseCandidates, parseEdition } from './goodreads.js';
 import { MAX_BYTES as MAX_EVENT_BYTES, cleanBatch, pruneEvents, saveBatch } from './events.js';
 
 // the last one is the browser extension (extension/), whose ID the manifest's `key` pins
@@ -57,7 +57,7 @@ async function fromGoodreads(pageUrl, parse, fetchFn, wait) {
       miss = `status ${response.status}`;
       why = response.status === 202 ? 'page-empty' : response.status === 403 || response.status === 429 ? 'page-refused' : 'page-down';
       if (response.status === 200 && response.body) {
-        const found = parse(await readHead(response));
+        const found = parse(await readHead(response), response.url);
         if (found) return { found };
         miss = 'no book data in page';
         why = 'page-no-book';
@@ -149,8 +149,8 @@ export function createHandler({ fetchFn, cache, wait = (ms) => new Promise((reso
       const isbn = normalizeIsbn(param('isbn'));
       if (!isValidIsbn(isbn)) return json({ error: 'invalid isbn' }, 400, 0, cors);
       kind = 'lookup';
-      key = `v7/${isbn}`; // v7: 404s carry a reason // v6: the first author, as listed
-      work = () => pageAnswer(`https://www.goodreads.com/book/isbn/${isbn}`, parseBook);
+      key = `v8/${isbn}`; // v8: the Goodreads book id // v7: 404s carry a reason // v6: the first author, as listed
+      work = () => pageAnswer(`https://www.goodreads.com/book/isbn/${isbn}`, parseLookup);
     } else if (url.pathname === '/book') {
       const id = param('id');
       if (!/^\d{1,12}$/.test(id)) return json({ error: 'invalid id' }, 400, 0, cors);
