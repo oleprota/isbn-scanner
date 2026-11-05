@@ -17,3 +17,13 @@ export function isbnFromHash(hash) {
 export function hashForIsbn(isbn) {
   return `#isbn=${encodeURIComponent(isbn)}`;
 }
+
+// A book with no ISBN (picked by title) links by its Goodreads id: `#gr=1885`.
+export function grFromHash(hash) {
+  const match = /^#gr=(\d{1,12})(?:&|$)/.exec(hash ?? '');
+  return match ? match[1] : null;
+}
+
+export function hashForGr(id) {
+  return `#gr=${id}`;
+}

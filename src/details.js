@@ -1,6 +1,6 @@
 // The parts of a book card that come from the lookup: the rating (the accent of the card), and the
 // series and author with links to Goodreads. All text goes in via textContent.
-import { el } from './dom.js';
+import { el, spinner } from './dom.js';
 import { card, formatRating } from './strings.js';
 import { goodreadsSearch } from './links.js';
 import { THIN_RATING_COUNT, isThin } from './lookup.js';
@@ -70,14 +70,40 @@ function outsideLink(href, text) {
   return link;
 }
 
+// "ISBN  9786171299412": the number, or, for a book picked by title that has none yet, a spinner beside the label while
+// the edition request runs, or "(не знайдено)" and a small circular-arrow button that asks again (a spinner takes its
+// place while it runs). `state`: { isbn, running, failed, why, retry }: `failed` is this card's own memory of an answer
+// without an ISBN, `why` the reason for the button's tooltip, `retry()` asks again. Returns the dt and dd.
+export function isbnRows({ isbn, running, failed, why, retry }) {
+  const label = el('dt', card.isbnLabel);
+  const value = el('dd', null, 'isbn-value');
+  if (isbn) {
+    value.textContent = isbn;
+  } else if (running && !failed) {
+    label.append(spinner(card.isbnLooking));
+  } else {
+    value.append(el('span', card.isbnNotFound));
+    if (running) {
+      value.append(spinner(card.isbnLooking));
+    } else {
+      const again = el('button', '\u21BB\uFE0E', 'isbn-retry'); // ↻
+      again.type = 'button';
+      again.title = card.isbnRetryTitle(why);
+      again.setAttribute('aria-label', card.isbnRetry);
+      again.addEventListener('click', retry);
+      value.append(again);
+    }
+  }
+  return [label, value];
+}
+
 // "Серія  Хроніки Буресвітла #1" and "Автор  Brandon Sanderson", each name a link to Goodreads
-// (the series a search for its name; the author's own page). Null when there is neither.
-export function factsBlock({ series, author }) {
-  if (!series && !author) return null;
+// (the series its own page, or a search for its name; the author's own page), then the ISBN row (`isbnRows`).
+export function factsBlock({ series, author } = {}, isbn = []) {
   const facts = el('dl', null, 'facts');
   if (series) {
     const value = el('dd');
-    value.append(outsideLink(goodreadsSearch(series.name), series.name));
+    value.append(outsideLink(series.url ?? goodreadsSearch(series.name), series.name));
     if (series.number) value.append(el('span', ` #${series.number}`, 'series-number'));
     facts.append(el('dt', card.seriesLabel), value);
   }
@@ -86,5 +112,6 @@ export function factsBlock({ series, author }) {
     value.append(author.url ? outsideLink(author.url, author.name) : author.name);
     facts.append(el('dt', card.authorLabel), value);
   }
+  facts.append(...isbn);
   return facts;
 }

@@ -115,3 +115,14 @@ test('the daily job deletes events older than 90 days, and does nothing without 
   assert.equal(run.length, 2); // one run from the job with a database, none without
   assert.equal(waiting.length, 1);
 });
+
+test('title_pick carries only whether the ISBN was known; isbn_found carries the edition answer and no free text', () => {
+  const batch = cleanBatch(body([
+    { name: 'title_pick', isbn: 0, details: 1, title: 'x' },
+    { name: 'isbn_found', found: 0, result: 'missing', reason: 'page-404', ms: 812.2, retry: 1, details: 0, isbn: '9786171299412' },
+  ]), NOW);
+  assert.deepEqual(batch.rows.map((r) => [r.name, r.data]), [
+    ['title_pick', '{"isbn":0}'],
+    ['isbn_found', '{"found":0,"result":"missing","reason":"page-404","ms":812,"retry":1,"details":0}'],
+  ]);
+});

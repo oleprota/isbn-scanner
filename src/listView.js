@@ -18,22 +18,22 @@ export function iconButton(icon, label) {
 // name ("Mark") and exposes its state, instead of renaming itself.
 export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {} }) {
   function sync(button) {
-    const isMarked = marked.has(button.dataset.isbn);
+    const isMarked = marked.has(button.dataset.id);
     button.textContent = isMarked ? '★' : '☆';
     button.title = isMarked ? card.isMarked : card.mark;
     button.setAttribute('aria-pressed', String(isMarked));
   }
   return {
-    // `book.title` is read on click, so a rename after the button was made is picked up.
-    create(book, isbn) {
+    // `book` is { id, isbn?, title }; `book.title` is read on click, so a rename after the button was made is picked up.
+    create(book) {
       const button = iconButton('', card.mark);
       button.classList.add('mark-toggle');
-      button.dataset.isbn = isbn;
+      button.dataset.id = book.id;
       button.addEventListener('click', () => {
-        if (marked.has(isbn)) {
-          marked.remove(isbn);
+        if (marked.has(book.id)) {
+          marked.remove(book.id);
           onToggle(false);
-        } else if (marked.add({ isbn, title: book.title })) onToggle(true);
+        } else if (marked.add({ id: book.id, isbn: book.isbn, title: book.title })) onToggle(true);
         else onFull(); // the list is full
         onChange();
       });
@@ -59,13 +59,13 @@ function ratingTag(value, thin) {
 // One book list in the page (Scanned or Marked): the rows, and its Copy / Clear actions.
 // All text goes in via textContent.
 //   list: a book list (src/bookList.js); confirmClear(booksText): the confirm question, given the count as text ("3 книги");
-//   rowButton(book): the button at the end of each row; onOpen(isbn): search for a book from the list;
+//   rowButton(book): the button at the end of each row; onOpen(book): show a book from the list;
 //   onChange(): called after Clear, so every list and star in the page is redrawn;
-//   ratings(): Map of isbn -> rating value (a book without one is not in it); sortMode, onSort(mode): the list's
+//   ratings(): Map of id -> rating value (a book without one is not in it); sortMode, onSort(mode): the list's
 //   order (see src/sort.js) and what to do when the user picks another one;
-//   details(isbn): what the lookup found for a book ({ author, rating, ... }) or undefined (Copy writes the author and rating)
-//   foundBy(): Map of isbn -> { title, author } for the books found by a title search (their site links search for them, not the ISBN);
-//   isWaiting(isbn): true while the book's name is still being looked up (the row shows a spinner);
+//   details(id): what the lookup found for a book ({ author, rating, ... }) or undefined (Copy writes the author and rating)
+//   foundBy(): Map of id -> { title, author, url } for the books found by a title search (their site links search for them, not the ISBN);
+//   isWaiting(id): true while the book's name is still being looked up (the row shows a spinner);
 //   onCopy(ok): the Copy button was used (for the usage stats); notify(text, isError): status line; elements: { section, count, items, empty, copy, clear }
 // The section (a <details>) opens by itself when the list stops being empty (on load, or at the
 // first book added, also while scanning); after that the user's open/closed choice is left alone.
@@ -76,7 +76,7 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
   let stale = false; // a closed section is not redrawn (up to 1000 rows per scan); it catches up when opened
 
   // the books in the order the user sees them
-  const ordered = (all, rated = ratings()) => sortBooks(all, sortMode, { ratingOf: (isbn) => rated.get(isbn) ?? 0, isWaiting });
+  const ordered = (all, rated = ratings()) => sortBooks(all, sortMode, { ratingOf: (id) => rated.get(id) ?? 0, isWaiting });
 
   function render() {
     const all = list.list();
@@ -97,16 +97,16 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
       open.type = 'button';
       open.disabled = locked;
       open.title = book.title; // the full name, for a name the row has to cut
-      open.addEventListener('click', () => onOpen(book.isbn));
+      open.addEventListener('click', () => onOpen(book));
       const actions = el('span', null, 'row-actions');
       actions.append(
-        ...isbnLinks(book.isbn, found.get(book.isbn)).map((link) => linkButton(link)),
+        ...isbnLinks(book.isbn, found.get(book.id)).map((link) => linkButton(link)),
         rowButton(book),
       );
       item.append(open);
       // the spinner and the rating share one place; the rating (the star and the value only) comes once the lookup is over
-      if (isWaiting(book.isbn)) item.append(spinner(search.lookingUp));
-      else if (rated.has(book.isbn)) item.append(ratingTag(rated.get(book.isbn), thin.has(book.isbn)));
+      if (isWaiting(book.id)) item.append(spinner(search.lookingUp));
+      else if (rated.has(book.id)) item.append(ratingTag(rated.get(book.id), thin.has(book.id)));
       item.append(actions);
       return item;
     }));
@@ -166,9 +166,9 @@ export function createListView({ list, confirmClear, rowButton, onOpen, onChange
 
   copy.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(copyText(ordered(list.list()), (isbn) => {
-        const found = details(isbn);
-        return { author: found?.author?.name, rating: found?.rating, found: foundBy().get(isbn) };
+      await navigator.clipboard.writeText(copyText(ordered(list.list()), (book) => {
+        const found = details(book.id);
+        return { author: found?.author?.name, rating: found?.rating, found: foundBy().get(book.id) };
       }));
       notify(lists.copied(books(list.list().length)));
       onCopy(true);

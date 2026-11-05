@@ -93,7 +93,7 @@ test('details are kept with a version; an older entry is not current, and rating
   assert.equal(titles.detailsCurrent('1'), false);
   titles.setDetails('1', { ...found('One'), rating: { value: 4, count: 3 } });
   assert.equal(titles.detailsCurrent('1'), true);
-  assert.deepEqual([...titles.ratings()], [['1', 4]]);
+  assert.deepEqual([...titles.ratings()], [['isbn:1', 4]]);
   assert.equal(stores.details.read()[0].isbn, '1');
 });
 
@@ -102,9 +102,9 @@ test('the title and author a book was found by are kept, newest first, and clear
   assert.equal(titles.foundBy('1'), null);
   titles.setFoundBy('1', { title: '  Хірург ', author: 'Tess   Gerritsen' });
   titles.setFoundBy('2', { title: 'Other' });
-  assert.deepEqual(titles.foundBy('1'), { isbn: '1', title: 'Хірург', author: 'Tess Gerritsen' });
+  assert.deepEqual(titles.foundBy('1'), { id: 'isbn:1', isbn: '1', title: 'Хірург', author: 'Tess Gerritsen' });
   assert.equal(titles.foundBy('2').author, '');
-  assert.deepEqual([...titles.allFoundBy().keys()], ['2', '1']);
+  assert.deepEqual([...titles.allFoundBy().keys()], ['isbn:2', 'isbn:1']);
   titles.clearFoundBy('1');
   assert.equal(titles.foundBy('1'), null);
   assert.equal(titles.of('1'), 'ISBN 1');

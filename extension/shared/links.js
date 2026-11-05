@@ -3,11 +3,14 @@
 // fetched from the sites to show them.
 import { card } from './strings.js';
 
-// A book found by title (`found`: { title, author }, see bookTitles.js) links to searches instead of the ISBN:
+// A book found by title (`found`: { title, author, url }, see bookTitles.js) links to searches instead of the ISBN:
 // Ereadian for the title alone (its search misses a book when an author is spelled differently there), Goodreads
-// for the title and the author (the title alone finds too many other books).
+// for its page (`url`, the page address of the book picked), or for the title and the author when the book has no
+// page address (the title alone finds too many other books). A book with no ISBN is always one found by title.
+// A book with both an ISBN and a page address (upgraded by the lookup: it is known to be that Goodreads book) links
+// Ereadian by the ISBN and Goodreads by the page.
 export function isbnLinks(isbn, found = null) {
-  const q = encodeURIComponent(isbn);
+  const q = encodeURIComponent(isbn ?? '');
   if (!found) {
     return [
       { name: 'Ereadian', url: `https://ereadian.com/search?q=${q}`, icon: 'icons/ereadian.png', title: card.linkTitle(isbn, 'Ereadian') },
@@ -15,12 +18,17 @@ export function isbnLinks(isbn, found = null) {
     ];
   }
   const withAuthor = [found.title, found.author].filter(Boolean).join(' ');
+  const goodreads = found.url
+    ? { url: found.url, title: card.pageLinkTitle(found.title, 'Goodreads') }
+    : { url: goodreadsSearch(withAuthor), title: card.searchLinkTitle(withAuthor, 'Goodreads') };
+  const ereadian = isbn && found.url
+    ? { url: `https://ereadian.com/search?q=${q}`, title: card.linkTitle(isbn, 'Ereadian') }
+    : { url: `https://ereadian.com/search?q=${encodeURIComponent(found.title)}`, title: card.searchLinkTitle(found.title, 'Ereadian') };
   return [
-    { name: 'Ereadian', url: `https://ereadian.com/search?q=${encodeURIComponent(found.title)}`, icon: 'icons/ereadian.png', title: card.searchLinkTitle(found.title, 'Ereadian') },
-    { name: 'Goodreads', url: goodreadsSearch(withAuthor), icon: 'icons/goodreads.png', title: card.searchLinkTitle(withAuthor, 'Goodreads') },
+    { name: 'Ereadian', icon: 'icons/ereadian.png', ...ereadian },
+    { name: 'Goodreads', icon: 'icons/goodreads.png', ...goodreads },
   ];
 }
 
-// A Goodreads search by text. Also stands in for a series' own page, which has an id that the lookup
-// does not return.
+// A Goodreads search by text. Also stands in for a series' own page when the lookup gave no address for it.
 export const goodreadsSearch = (text) => `https://www.goodreads.com/search?q=${encodeURIComponent(text)}`;

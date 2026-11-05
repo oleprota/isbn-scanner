@@ -48,8 +48,7 @@ export const search = {
   pickBook: 'Оберіть книгу:',
   noTitleResults: 'За такою назвою нічого не знайдено.',
   searchFailed: 'Не вдалося знайти. Спробуйте ще раз.',
-  gettingIsbn: 'Шукаю ISBN…',
-  noIsbn: (title) => `Не вдалося дізнатись ISBN для «${title}». Спробуйте інше видання.`,
+  candidateRating: (value) => (value > 0 ? `★ ${value.toFixed(2)}` : '★ n/a'),
 };
 
 export const scanner = {
@@ -87,6 +86,11 @@ export const card = {
     };
     return why[outcome === 'missing' ? reason : outcome] ?? why['no-reason'];
   },
+  isbnLabel: 'ISBN',
+  isbnLooking: 'Шукаю ISBN…',
+  isbnNotFound: '(не знайдено)',
+  isbnRetry: 'Спробувати ще раз',
+  isbnRetryTitle: (why) => (why ? `Спробувати ще раз. ${why}` : 'Спробувати ще раз'),
   seriesLabel: 'Серія',
   authorLabel: 'Автор',
   nameLabel: 'Назва книги',
@@ -96,6 +100,7 @@ export const card = {
   unmark: 'Прибрати з вибраного',
   linkTitle: (isbn, site) => `${isbn} на ${site}`,
   searchLinkTitle: (query, site) => `Шукати «${query}» на ${site}`,
+  pageLinkTitle: (title, site) => `«${title}» на ${site}`,
 };
 
 export const lists = {

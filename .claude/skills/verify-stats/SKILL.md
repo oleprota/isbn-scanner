@@ -12,5 +12,6 @@ Read `../verify-app/common.md` first (setup, closing check, report). Mock `**/ev
 3. **Privacy.** No body holds an ISBN, a title or a name.
 4. **Do Not Track.** With `Object.defineProperty(navigator, 'doNotTrack', { value: '1' })` in an init script nothing is sent and `#stats-note` is hidden.
 5. **Dev flag.** Loading `/#dev` keeps the flag and removes the hash from the address.
+6. **Title pick.** Pick a candidate (mocks as in verify-lookup): `title_pick` is sent at click time with only `isbn` (`0` for a new book, `1` when its ISBN was already stored). When the edition request ends, one `isbn_found` follows with `found` (1/0), `result` (`found`, `missing`, `timeout`, ...), `reason` for a 404, `ms`, `retry` (0 automatic, 1 the card's retry button) and `details`; no ISBN, title or name in it. A card built later for a book that still has no ISBN sends another `isbn_found` with `retry` 0.
 
 Finish with the closing check from `common.md`.

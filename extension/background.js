@@ -113,7 +113,7 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     const facts = debug(`${isbn} · of ${seen} · ${outcome}${Object.keys(detail ?? {}).length ? ` ${JSON.stringify(detail)}` : ''} · ${took} ms`);
     if (!details) return respond({ problem: 'lookup', message: why, ...facts });
     const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
-    respond({ ...facts, card: { ...details, isbn, links, rating: shapeRating(details.rating), seriesUrl: details.series && goodreadsSearch(details.series.name) } });
+    respond({ ...facts, card: { ...details, isbn, links, rating: shapeRating(details.rating), seriesUrl: details.series && (details.series.url || goodreadsSearch(details.series.name)) } });
   })();
   return true; // the answer comes later
 });

@@ -2,15 +2,17 @@ import { isValidIsbn, looksLikeIsbn, normalizeIsbn } from './isbn.js';
 import { isbnLinks } from './links.js';
 import { startScanner } from './scanner.js';
 import { createScanSession } from './scanSession.js';
-import { hashForIsbn, isbnFromHash } from './hash.js';
+import { grFromHash, hashForGr, hashForIsbn, isbnFromHash } from './hash.js';
+import { isbnId } from './bookId.js';
+import { candidateId, detailsFromCandidate } from './candidate.js';
 import { createListStore } from './storage.js';
 import { bucket, createStats, describeClient } from './stats.js';
 import { createBookList } from './bookList.js';
 import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
-import { coverImage, factsBlock, ratingBlock } from './details.js';
-import { LOOKUP_URL, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
+import { coverImage, factsBlock, isbnRows, ratingBlock } from './details.js';
+import { LOOKUP_URL, bookPageUrl, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
 import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
@@ -87,9 +89,12 @@ function clearWarning() {
   warning.hidden = true;
 }
 
-const openBook = (isbn) => {
-  input.value = isbn;
-  search(isbn, { move: false, via: 'list' });
+// A book from a list: one with an ISBN is searched again, one without (picked by title) shows its card from what is stored.
+const openBook = (book) => {
+  if (book.isbn) {
+    input.value = book.isbn;
+    search(book.isbn, { move: false, via: 'list' });
+  } else showPicked(book);
 };
 const listElements = (id) => ({
   section: document.getElementById(id),
@@ -118,7 +123,7 @@ const listView = (name, list, own) => createListView({
   list,
   onOpen: openBook,
   onChange: renderLists,
-  isWaiting: (isbn) => pending.has(isbn),
+  isWaiting: (id) => pending.has(id),
   ratings: titles.ratings,
   thinRatings: titles.thinRatings,
   foundBy: titles.allFoundBy,
@@ -135,14 +140,14 @@ const listView = (name, list, own) => createListView({
 });
 const scannedView = listView('scanned', scanned, {
   confirmClear: str.lists.clearScanned,
-  rowButton: (book) => markToggle.create(book, book.isbn),
+  rowButton: (book) => markToggle.create(book),
 });
 const markedView = listView('marked', marked, {
   confirmClear: str.lists.clearMarked,
   rowButton: (book) => {
     const remove = iconButton('✕', str.card.unmark);
     remove.addEventListener('click', () => {
-      marked.remove(book.isbn);
+      marked.remove(book.id);
       stats.track('star', { on: 0 });
       renderLists();
     });
@@ -163,6 +168,7 @@ function setStatus(text, isError = false, ttl = 0) {
 // the field is edited; a confirmation (Copied) goes away on its own.
 const NOTE_MS = 4000;
 input.addEventListener('input', () => {
+  hideCandidates();
   setStatus('');
   clearWarning();
 });
@@ -170,10 +176,10 @@ input.addEventListener('input', () => {
 
 // The title on a card is also where the book is named: tap it to type a name (Enter or leaving
 // the field saves, Escape cancels); an empty name goes back to `ISBN <number>`. The name is saved
-// per ISBN and also updates the Scanned and Marked entries for that book.
+// per book and also updates the Scanned and Marked entries for that book.
 // Returns the heading, `update(title)` for a title that arrives later from the lookup, and
 // `setWaiting(on)` for the spinner beside the title that shows the lookup is still running.
-function titleHeading(book, isbn, waiting) {
+function titleHeading(book, waiting) {
   const heading = el('h2', null, 'book-title');
   const slot = el('span', null, 'title-slot'); // the title button or the editor field
   const ring = spinner(str.search.lookingUp);
@@ -196,7 +202,7 @@ function titleHeading(book, isbn, waiting) {
     const value = cleanText(raw, NAME_MAX);
     if (value === initial) return; // unchanged: this also keeps titles saved by earlier versions
     stats.track('title_edit', { cleared: value ? 0 : 1 });
-    const title = titles.rename(isbn, value);
+    const title = titles.rename(book.id, value);
     if (title === book.title) return; // e.g. an empty name on a card that already shows the default
     book.title = title;
     renderLists();
@@ -208,7 +214,7 @@ function titleHeading(book, isbn, waiting) {
     field.maxLength = NAME_MAX;
     const initial = book.title; // a title found by the lookup meanwhile is not a change made here
     field.value = initial;
-    field.placeholder = titles.fallback(isbn); // what an empty name turns back into
+    field.placeholder = titles.fallback(book.id); // what an empty name turns back into
     field.setAttribute('aria-label', str.card.nameLabel);
     let finished = false;
     const finish = (keep, refocus) => {
@@ -242,63 +248,124 @@ function titleHeading(book, isbn, waiting) {
   return { heading, update, setWaiting };
 }
 
-// The card on screen, so that a lookup answer can reach it: { card, isbn, book, update, setDetails, setWaiting }.
+// The card on screen, so that a lookup answer can reach it: { card, book, update, setDetails, setWaiting, refresh, failure }.
+// `book` is { id, isbn?, title }: a book picked by title has no ISBN until its edition request answers (kept in its
+// details). `failure`: this card's own memory of a failed edition request ({ outcome, reason, status }), never stored.
 let shown = null;
 
-function renderBook(book, isbn) {
+function renderBook(book) {
   const card = el('article', null, 'book');
   const head = el('div', null, 'book-head');
   const body = el('div', null, 'book-main');
-  const { heading, update, setWaiting } = titleHeading(book, isbn, pending.has(isbn));
+  const { heading, update, setWaiting } = titleHeading(book, pending.has(book.id));
   body.append(heading);
   const facts = el('div', null, 'facts-slot');
-  // what the lookup found: the cover beside the title, the rating under it, series and author under the head
+  const links = el('div', null, 'link-row');
+  const self = { card, book, failure: null };
+  // series, author and the ISBN row under the head, and the links: they follow what is known now (the ISBN
+  // may arrive after the card was built, and so may the request's progress)
+  const refresh = () => {
+    const found = titles.details(book.id);
+    const isbn = book.isbn ?? found?.isbn;
+    facts.replaceChildren(factsBlock(found ?? {}, isbnRows({
+      isbn,
+      running: editionsRunning.has(book.id),
+      failed: Boolean(self.failure),
+      why: self.failure && str.card.lookupWhy(self.failure),
+      retry: () => requestEdition(book.id, { retry: true }),
+    })));
+    links.replaceChildren(...isbnLinks(isbn, titles.foundBy(book.id)).map((link) => linkButton(link, { big: true })));
+  };
+  // what the lookup found: the cover beside the title, the rating under it, then the rest
   const setDetails = (found) => {
     head.querySelector('.cover')?.remove();
     if (found?.image) head.prepend(coverImage(found.image));
     body.querySelector('.rating')?.remove();
     if (found?.rating) heading.after(ratingBlock(found.rating));
-    facts.replaceChildren(...[found && factsBlock(found)].filter(Boolean));
+    refresh();
   };
   // the star sits at the right edge of the card, like the buttons at the end of the list rows
-  head.append(body, markToggle.create(book, isbn));
-  setDetails(titles.details(isbn));
-  const links = el('div', null, 'link-row');
-  links.append(...isbnLinks(isbn, titles.foundBy(isbn)).map((link) => linkButton(link, { big: true })));
+  head.append(body, markToggle.create(book));
+  setDetails(titles.details(book.id));
   card.append(head, facts, links);
   result.replaceChildren(card);
-  shown = { card, isbn, book, update, setDetails, setWaiting };
+  shown = Object.assign(self, { update, setDetails, setWaiting, refresh, refreshLinks: refresh });
 }
 
 // Asks the lookup service for the book's name and cover, in the background: the card, the beep and
 // "Додано" never wait for it, and a failure is silent. One request per ISBN per page load.
 const asked = new Set();
 const pending = new Set(); // asked and not answered yet: its card shows a spinner beside the title
+const editionsRunning = new Set(); // books picked by title whose edition request is out (asked again at every card until it answers)
 
 function requestMeta(isbn) {
+  const id = titles.idOf(isbn);
   // an entry saved by an older version lacks the new fields: it is shown until the answer replaces it
-  if (!LOOKUP_URL || titles.detailsCurrent(isbn) || asked.has(isbn)) return;
-  asked.add(isbn);
-  pending.add(isbn);
+  if (!LOOKUP_URL || titles.detailsCurrent(id) || asked.has(id)) return;
+  asked.add(id);
+  pending.add(id);
   renderLists(); // the rows of this book show the spinner too (several lookups can run at once while scanning)
   lookupBook(isbn, { report: (result, ms, detail) => stats.track('lookup', { result, ms, reason: detail?.reason }) }).then((found) => {
-    pending.delete(isbn);
-    if (found) return applyMeta(isbn, found);
-    if (shownCard(isbn)) shown.setWaiting(false);
+    pending.delete(id);
+    if (found) return applyLookup(id, isbn, found);
+    asked.delete(id); // nothing changed: the next card of this book asks again
+    if (shownCard(id)) shown.setWaiting(false);
     renderLists();
   });
 }
 
-const shownCard = (isbn) => shown?.isbn === isbn && result.contains(shown.card);
+// The answer for an ISBN: when it carries the Goodreads book id, the book `isbn:X` becomes `gr:N` (merging a book already
+// stored as `gr:N`), and a book found by title gets its Goodreads page address. Silent.
+function applyLookup(id, isbn, { bookId, ...found }) {
+  let now = id;
+  if (bookId && id.startsWith('isbn:')) {
+    now = `gr:${bookId}`;
+    titles.rekey(id, now);
+    const picked = titles.foundBy(now);
+    if (picked && !picked.url) titles.setFoundBy(now, { ...picked, url: bookPageUrl(bookId) });
+    if (shown?.book.id === id) { // the card on screen is that book: it follows the id
+      shown.book.id = now;
+      shown.card.querySelector('.mark-toggle').dataset.id = now;
+      shown.refreshLinks(titles.foundBy(now));
+    }
+  }
+  applyMeta(now, found, isbn);
+}
+
+// The edition request of a book picked by title (`gr:<n>`), in the background: its card and row are already there.
+// The answer replaces the partial details with current ones and stores the ISBN (not shown yet); a book already
+// known by that ISBN is merged into this one. A failure never blocks anything: the card shows "(не знайдено)" with
+// a button (`retry`: the user's) and nothing is remembered, so every card built for the book asks again.
+// The answer is reported once to the usage stats (`isbn_found`).
+function requestEdition(id, { retry = false } = {}) {
+  if (!LOOKUP_URL || editionsRunning.has(id) || (titles.detailsCurrent(id) && titles.details(id).isbn)) return;
+  editionsRunning.add(id);
+  let why = {};
+  if (shownCard(id)) shown.refresh();
+  editionOfBook(id.slice(3), { report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
+    editionsRunning.delete(id);
+    stats.track('isbn_found', { found: edition ? 1 : 0, result: why.outcome, reason: why.reason, ms: why.ms, retry: retry ? 1 : 0, details: edition?.found ? 1 : 0 });
+    if (shownCard(id)) shown.failure = edition ? null : why;
+    if (edition) {
+      titles.rekey(isbnId(edition.isbn), id);
+      if (edition.found) applyMeta(id, edition.found, edition.isbn);
+      else if (titles.details(id)) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
+    }
+    if (shownCard(id)) shown.refresh();
+    renderLists();
+  });
+}
+
+const shownCard = (id) => shown?.book.id === id && result.contains(shown.card);
 
 // A found title only replaces the default `ISBN <number>` or the title an earlier lookup of this
 // book gave (older versions kept the series bracket in it): never a typed name or another title.
-function applyMeta(isbn, found) {
-  const replaceable = titles.setDetails(isbn, found);
+function applyMeta(id, found, isbn) {
+  const replaceable = titles.setDetails(id, found, { isbn });
   // an answer for a card that is no longer on screen only fills the cache
-  if (shownCard(isbn)) {
+  if (shownCard(id)) {
     shown.setWaiting(false);
-    if (replaceable(shown.book.title)) shown.update(found.title);
+    if (replaceable(shown.book.title)) shown.update(titles.of(id)); // not found.title: a merge may have brought a typed name
     shown.setDetails(found);
   }
   renderLists();
@@ -376,8 +443,8 @@ function confirmScan(frequency = BEEP_NEW) {
 
 // Every search or scan puts the book at the top of the Scanned list. Returns false when the
 // list is full and the book is new: it is not added, and the warning says so.
-function noteScanned(isbn, title) {
-  const stored = scanned.bump({ isbn, title });
+function noteScanned(book) {
+  const stored = scanned.bump(book);
   if (!stored) warnFull('scanned', scanned);
   renderLists();
   return stored;
@@ -385,23 +452,27 @@ function noteScanned(isbn, title) {
 
 // Showing a book without searching for it again (opened from a list, Back/Forward, a reload
 // with a link): it is added to Scanned if missing, but an existing row stays where it is.
-function noteShown(isbn, title) {
-  if (!scanned.has(isbn)) noteScanned(isbn, title);
+function noteShown(book) {
+  if (!scanned.has(book.id)) noteScanned(book);
 }
+
+// A book known by its ISBN: { id, isbn, title }.
+// (the id is `gr:<n>` for a book the lookup has upgraded)
+const isbnBook = (isbn) => ({ id: titles.idOf(isbn), isbn, title: titles.of(isbn) });
 
 // A series read a book: add it to Scanned (or move it to the top if it is already there).
 function addScanned(isbn, again) {
-  titles.clearFoundBy(isbn); // a barcode is the real ISBN of the book in hand
+  titles.clearFoundBy(titles.idOf(isbn)); // a barcode is the real ISBN of the book in hand
   clearWarning();
-  if (again) return noteScanned(isbn, titles.of(isbn));
-  const book = { title: titles.of(isbn) };
-  if (noteScanned(isbn, book.title)) {
+  const book = isbnBook(isbn);
+  if (again) return noteScanned(book);
+  if (noteScanned(book)) {
     setStatus(str.lists.added(book.title));
     requestMeta(isbn);
   } else setStatus(str.lists.notAdded(book.title), true);
 }
 
-const scannedTitle = (isbn) => scanned.list().find((book) => book.isbn === isbn)?.title;
+const scannedTitle = (isbn) => scanned.list().find((book) => book.id === titles.idOf(isbn))?.title;
 
 const session = createScanSession({
   // a new <video> for every start: an iPhone kept showing a later start's picture unfitted to the box when the element was reused
@@ -447,7 +518,7 @@ const session = createScanSession({
         addScanned(outcome.isbn, outcome.again);
         break;
       case 'bump':
-        noteScanned(outcome.isbn, titles.of(outcome.isbn));
+        noteScanned(isbnBook(outcome.isbn));
         break;
       case 'failed':
         setStatus(str.scanner.cameraUnavailable, true);
@@ -518,9 +589,8 @@ form.addEventListener('submit', (event) => {
   search(normalizeIsbn(input.value));
 });
 
-// Title search: the candidates from Goodreads are listed on the page; the one picked gives its ISBN, and the
-// book is then shown like any other, except that its links search for the title. `pickToken` drops the answer
-// of a search or pick that a newer search has replaced.
+// Title search: the candidates from Goodreads are listed on the page; the one picked is shown at once (see pickCandidate)
+// and its links search for the title. `pickToken` drops the answer of a search that a newer search or a pick has replaced.
 let pickToken = 0;
 
 async function searchTitle(text) {
@@ -535,11 +605,59 @@ async function searchTitle(text) {
   if (!found) return setStatus(str.search.searchFailed, true);
   if (!found.length) return setStatus(str.search.noTitleResults, true);
   setStatus(str.search.pickBook);
-  result.replaceChildren(candidateList(found, token));
+  result.replaceChildren(candidateList(found));
   input.blur();
 }
 
-function candidateList(found, token) {
+// The candidate list goes away (with its "choose a book" status) when the text changes, on a click outside it
+// (the field itself excepted), on Escape and when a candidate is picked.
+function hideCandidates() {
+  if (!result.querySelector('.candidates')) return;
+  result.replaceChildren();
+  setStatus('');
+}
+document.addEventListener('click', (event) => {
+  if (!event.target.closest?.('.candidates') && event.target !== input) hideCandidates();
+});
+document.addEventListener('keydown', (event) => event.key === 'Escape' && hideCandidates());
+
+// The book picked from the candidates is shown at once, built from what the search told (saved as partial details),
+// and listed in Scanned; it has no ISBN until the edition request, which runs in the background, answers.
+function pickCandidate(candidate) {
+  hideCandidates();
+  pickToken++;
+  closeScanner();
+  clearWarning();
+  setStatus('');
+  const id = candidateId(candidate);
+  stats.track('title_pick', { isbn: titles.details(id)?.isbn ? 1 : 0 }); // at click time: was the ISBN already known
+  titles.setFoundBy(id, { title: candidate.title, author: candidate.author, url: candidate.bookUrl });
+  if (!titles.detailsCurrent(id)) titles.setDetails(id, detailsFromCandidate(candidate), { partial: true }); // never replaces full details
+  const book = { id, title: titles.of(id) };
+  noteScanned(book);
+  if (grFromHash(location.hash) !== candidate.id) history.pushState(null, '', hashForGr(candidate.id));
+  requestEdition(id);
+  renderBook(book);
+  input.blur();
+}
+
+// A listed book with no ISBN is shown again from what is stored; its edition is asked again until it has answered.
+// `push: false`: the card comes from the address itself (load, Back/Forward), so no history entry is added.
+function showPicked(entry, { push = true } = {}) {
+  pickToken++;
+  closeScanner();
+  clearWarning();
+  setStatus('');
+  input.value = '';
+  if (push && grFromHash(location.hash) !== entry.id.slice(3)) history.pushState(null, '', hashForGr(entry.id.slice(3)));
+  const book = { id: entry.id, title: titles.of(entry.id) };
+  noteShown(book);
+  requestEdition(book.id);
+  renderBook(book);
+  input.blur();
+}
+
+function candidateList(found) {
   const list = el('ul', null, 'candidates');
   for (const book of found) {
     const pick = el('button', null, 'candidate');
@@ -547,17 +665,8 @@ function candidateList(found, token) {
     if (book.image) pick.append(coverImage(book.image));
     const text = el('span', null, 'candidate-text');
     text.append(el('span', book.title, 'candidate-title'), el('span', book.author, 'candidate-author'));
-    pick.append(text);
-    pick.addEventListener('click', async () => {
-      setStatus(str.search.gettingIsbn);
-      const edition = await editionOfBook(book.id);
-      if (token !== pickToken) return;
-      stats.track('title_pick', { isbn: edition ? 1 : 0, details: edition?.found ? 1 : 0 });
-      if (!edition) return setStatus(str.search.noIsbn(book.title), true);
-      if (edition.found) titles.setDetails(edition.isbn, edition.found); // the page already told everything: no second lookup
-      input.value = edition.isbn;
-      search(edition.isbn, { found: book, via: 'title' });
-    });
+    pick.append(text, el('span', str.search.candidateRating(book.rating), 'candidate-rating'));
+    pick.addEventListener('click', () => pickCandidate(book));
     const item = el('li');
     item.append(pick);
     list.append(item);
@@ -568,29 +677,49 @@ function candidateList(found, token) {
 // `push: false` is used when the search comes from the URL itself (load, Back/Forward);
 // those don't add a history entry. A valid search drops the focus from the field, so the phone keyboard closes.
 // `move: false`: the book is only shown again, so it keeps its place in the Scanned list.
-function search(isbn, { push = true, move = true, found = null, via = 'typed' } = {}) {
+function search(isbn, { push = true, move = true, via = 'typed' } = {}) {
   pickToken++;
   closeScanner();
   result.replaceChildren();
   stats.track('search', { via, ok: isValidIsbn(isbn) ? 1 : 0 });
   if (!isValidIsbn(isbn)) return setStatus(str.search.invalidIsbn, true);
-  if (move) found ? titles.setFoundBy(isbn, found) : titles.clearFoundBy(isbn); // a search by ISBN clears the title a book was once found by
+  const id = titles.idOf(isbn);
+  // a search by ISBN clears the title an `isbn:` book was once found by; a `gr:` book keeps its Goodreads page address (better than an ISBN link)
+  if (move && id.startsWith('isbn:')) titles.clearFoundBy(id);
   if (push && isbnFromHash(location.hash) !== isbn) history.pushState(null, '', hashForIsbn(isbn));
 
-  const book = { title: titles.of(isbn) };
+  const book = isbnBook(isbn);
   setStatus('');
   clearWarning();
-  (move ? noteScanned : noteShown)(isbn, book.title);
+  (move ? noteScanned : noteShown)(book);
   requestMeta(isbn); // before the card, so that the card knows to show the spinner
-  renderBook(book, isbn);
+  renderBook(book);
   input.blur();
+}
+
+// `#gr=<id>`: the card of a book with no ISBN is built from what is stored; an id never seen is asked of the
+// service, and when that gives no book the link is ignored without a message.
+async function showGrLink(num) {
+  const id = `gr:${num}`;
+  if (scanned.has(id) || marked.has(id) || titles.foundBy(id) || titles.details(id)) return showPicked({ id }, { push: false });
+  if (!LOOKUP_URL) return;
+  const token = ++pickToken;
+  const edition = await editionOfBook(num);
+  if (!edition?.found) return;
+  titles.rekey(isbnId(edition.isbn), id); // the same book already stored by its ISBN is merged into this one
+  titles.setFoundBy(id, { title: edition.found.title, author: edition.found.author?.name, url: `https://www.goodreads.com/book/show/${num}` });
+  titles.setDetails(id, edition.found, { isbn: edition.isbn });
+  if (token === pickToken) showPicked({ id }, { push: false }); // the answer is kept either way; the card only if nothing newer replaced it
 }
 
 window.addEventListener('popstate', () => {
   const isbn = isbnFromHash(location.hash);
+  const gr = grFromHash(location.hash);
   if (isbn) {
     input.value = isbn;
     search(isbn, { push: false, move: false, via: 'history' });
+  } else if (gr) {
+    showGrLink(gr);
   } else {
     pickToken++;
     closeScanner();
@@ -631,4 +760,4 @@ const linkedIsbn = isbnFromHash(location.hash);
 if (linkedIsbn) {
   input.value = linkedIsbn;
   search(linkedIsbn, { push: false, move: false, via: 'link' });
-}
+} else if (grFromHash(location.hash)) showGrLink(grFromHash(location.hash));

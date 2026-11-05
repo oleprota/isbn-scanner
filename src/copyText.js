@@ -8,17 +8,18 @@ import { formatRating, lists } from './strings.js';
 // characters stay encoded (a literal + is %2B, so the two never mix).
 const readable = (url) => url.replaceAll('%20', '+').replace(/(?:%[C-F][0-9A-F](?:%[89AB][0-9A-F])+)+/gi, decodeURIComponent);
 
-// `books`: [{ isbn, title }] in the order to write them.
-// `lookup(isbn)`: { author, rating: {value, count}, found: {title, author} } of a book, whatever is known.
+// `books`: [{ isbn?, title }] in the order to write them (a book with no ISBN is one found by title).
+// `lookup(book)`: { author, rating: {value, count}, found: {title, author, url} } of a book, whatever is known.
 export function copyText(books, lookup = () => ({})) {
   return books
-    .map(({ isbn, title }) => {
-      const { author, rating, found } = lookup(isbn) ?? {};
+    .map((book) => {
+      const { isbn, title } = book;
+      const { author, rating, found } = lookup(book) ?? {};
       const name = title.replace(/(?<!\.)\.$/, ''); // a single closing period goes, an ellipsis stays
       const { value, count } = rating ? formatRating(rating) : {};
       const stars = rating ? ` ${lists.copyStar} ${value} (${count})${isThin(rating) ? ` ${lists.copyThin}` : ''}` : '';
       const line = `${author ? `${author}, ` : ''}${name}${stars}`;
-      return [line, ...isbnLinks(isbn, found).map((link) => readable(link.url))].join('\n');
+      return [line, ...(isbn || found ? isbnLinks(isbn, found).map((link) => readable(link.url)) : [])].join('\n');
     })
     .join('\n\n');
 }

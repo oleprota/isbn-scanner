@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBook, parseCandidates, parseEdition, splitTitle } from '../worker/goodreads.js';
+import { pageSeries, parseBook, parseCandidates, parseEdition, splitTitle } from '../worker/goodreads.js';
 
 const page = (...blocks) =>
   `<html><head>${blocks.map((b) => `<script type="application/ld+json">${typeof b === 'string' ? b : JSON.stringify(b)}</script>`).join('')}</head></html>`;
@@ -90,5 +90,27 @@ test('parseEdition is the book with the edition\'s ISBN when it is valid, else n
 
 test('parseCandidates keeps id and title, cleans the rest, and is null for a non-list', () => {
   assert.equal(parseCandidates({}), null);
-  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '' }]);
+  assert.deepEqual(parseCandidates([null, { bookId: 5 }, { bookId: '5', title: 'Fallback' }]), [{ id: '5', title: 'Fallback', author: '', image: '', rating: 0, ratingCount: 0, bookUrl: '', authorUrl: '' }]);
+  const [full] = parseCandidates([{ bookId: '7', title: 'T', avgRating: '4.29', ratingsCount: '1,234', bookUrl: '/book/show/7', author: { name: 'A', profileUrl: 'https://www.goodreads.com/author/show/9' } }]);
+  assert.deepEqual([full.rating, full.ratingCount, full.bookUrl, full.authorUrl], [4.29, 1234, 'https://www.goodreads.com/book/show/7', 'https://www.goodreads.com/author/show/9']);
+});
+
+// the link under the title of the real page of 228086718 (checked 2026-11-05)
+const SAYLOK = { name: 'The Chronicles of Saylok', number: '1', url: 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok' };
+const seriesLink = '<h3 aria-label="Book 1 in the The Chronicles of Saylok series"><a href="https://www.goodreads.com/series/312023-the-chronicles-of-saylok" aria-label="Book 1 in the The Chronicles of Saylok series">The Chronicles of Saylok<!-- --> #1</a></h3>';
+
+test('the series comes from the title bracket, else from the page, and the page gives its address', () => {
+  assert.deepEqual(pageSeries(seriesLink), SAYLOK);
+  assert.equal(pageSeries('<a href="https://evil.example/series/1">X<!-- --> #1</a>'), null);
+  assert.equal(pageSeries('<html></html>'), null);
+  // no bracket: the page's series, and the title is not touched
+  const plain = parseBook(page({ ...book, name: 'Перша дівчинка. Хроніки Сейлока. Книга 1' }) + seriesLink);
+  assert.deepEqual([plain.title, plain.series], ['Перша дівчинка. Хроніки Сейлока. Книга 1', SAYLOK]);
+  // a bracket: its name and number stay (the edition's language), the page only adds the address
+  const bracketed = parseBook(page({ ...book, name: 'Перша дівчинка (Хроніки Сейлока, #1)' }) + seriesLink);
+  assert.deepEqual([bracketed.title, bracketed.series], ['Перша дівчинка', { name: 'Хроніки Сейлока', number: '1', url: SAYLOK.url }]);
+  // a bracket and no link on the page: no address
+  assert.deepEqual(parseBook(page(book)).series, { name: 'Хроніки Буресвітла', number: '1' });
+  // nothing at all
+  assert.equal(parseBook(page({ ...book, name: 'Matilda' })).series, null);
 });

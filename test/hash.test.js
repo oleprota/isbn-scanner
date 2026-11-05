@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hashForIsbn, isbnFromHash } from '../src/hash.js';
+import { grFromHash, hashForGr, hashForIsbn, isbnFromHash } from '../src/hash.js';
 import isbns from './fixtures/isbns.json' with { type: 'json' };
 
 test('reads a valid ISBN from the hash', () => {
@@ -26,5 +26,18 @@ test('every valid ISBN in the shared list survives a deep-link round trip; inval
   }
   for (const { isbn } of isbns.invalid) {
     assert.equal(isbnFromHash(hashForIsbn(isbn)), null, isbn);
+  }
+});
+
+test('reads a Goodreads book id from #gr=, builds one that reads back', () => {
+  assert.equal(grFromHash('#gr=1885'), '1885');
+  assert.equal(grFromHash('#gr=1885&x=1'), '1885');
+  assert.equal(grFromHash(hashForGr('4588')), '4588');
+  assert.equal(isbnFromHash('#gr=1885'), null);
+});
+
+test('ignores invalid #gr= values', () => {
+  for (const hash of ['', '#gr=', '#gr=abc', '#gr=12a', '#gr=-5', '#gr=1234567890123', '#gr=1.5', '#isbn=9780747532699', undefined, null]) {
+    assert.equal(grFromHash(hash), null, String(hash));
   }
 });

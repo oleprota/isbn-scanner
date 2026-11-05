@@ -34,7 +34,7 @@ test('returns the book and allows the app origin', async () => {
   const response = await get(`?isbn=${ISBN}`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('access-control-allow-origin'), ORIGIN);
-  assert.deepEqual(await response.json(), { title: 'Title', series: null, author: { name: 'A', url: 'https://www.goodreads.com/author/show/1.A' }, rating: { value: 4.5, count: 10 }, image: 'https://m.media-amazon.com/a.jpg' });
+  assert.deepEqual(await response.json(), { title: 'Title', series: null, author: { name: 'A', url: 'https://www.goodreads.com/author/show/1.A' }, rating: { value: 4.5, count: 10 }, image: 'https://m.media-amazon.com/a.jpg', bookId: '1' });
   assert.deepEqual(calls, [`https://www.goodreads.com/book/isbn/${ISBN}`]);
 });
 
@@ -159,7 +159,7 @@ test('cache bypass: the rate limiter still stops a bypassed request', async () =
   assert.equal(calls.length, 0);
 });
 
-const hit = (extra = {}) => ({ bookId: '32740697', bookTitleBare: 'Хірург', title: 'Хірург (Rizzoli & Isles #1)', imageUrl: 'https://i.gr-assets.com/a.jpg', avgRating: '4.10', author: { name: 'Tess Gerritsen' }, ...extra });
+const hit = (extra = {}) => ({ bookId: '32740697', bookTitleBare: 'Хірург', title: 'Хірург (Rizzoli & Isles #1)', imageUrl: 'https://i.gr-assets.com/a.jpg', avgRating: '4.10', ratingsCount: '1,234', bookUrl: '/book/show/32740697', author: { name: 'Tess Gerritsen', profileUrl: 'https://www.goodreads.com/author/show/1' }, ...extra });
 const suggestions = (list) => () => new Response(JSON.stringify(list));
 
 test('/search answers up to 5 cleaned candidates, from the search-as-you-type JSON', async () => {
@@ -168,9 +168,16 @@ test('/search answers up to 5 cleaned candidates, from the search-as-you-type JS
   assert.equal(response.status, 200);
   const { results } = await response.json();
   assert.equal(results.length, 5);
-  assert.deepEqual(results[0], { id: '32740697', title: 'Хірург', author: 'Tess Gerritsen', image: 'https://i.gr-assets.com/a.jpg' });
-  assert.deepEqual(results[1], { id: '2', title: 'Хірург', author: 'Tess Gerritsen', image: '' }); // 'x' is no id: dropped; the http cover is cleaned
+  assert.deepEqual(results[0], { id: '32740697', title: 'Хірург', author: 'Tess Gerritsen', image: 'https://i.gr-assets.com/a.jpg', rating: 4.1, ratingCount: 1234, bookUrl: 'https://www.goodreads.com/book/show/32740697', authorUrl: 'https://www.goodreads.com/author/show/1' });
+  assert.deepEqual(results[1], { id: '2', title: 'Хірург', author: 'Tess Gerritsen', image: '', rating: 0, ratingCount: 1234, bookUrl: 'https://www.goodreads.com/book/show/32740697', authorUrl: 'https://www.goodreads.com/author/show/1' }); // 'x' is no id: dropped; the http cover is cleaned
   assert.equal(calls[0], 'https://www.goodreads.com/book/auto_complete?format=json&q=%D0%A5%D1%96%D1%80%D1%83%D1%80%D0%B3');
+});
+
+test('/search drops addresses that are not Goodreads', async () => {
+  const { request } = setup(suggestions([hit({ bookUrl: 'https://evil.example/book/show/1', author: { name: 'T', profileUrl: 'javascript:x' } })]));
+  const [first] = (await (await request('/search?q=foreign')).json()).results;
+  assert.equal(first.bookUrl, '');
+  assert.equal(first.authorUrl, '');
 });
 
 test('/search rejects a missing or one-letter query, and says 502 when Goodreads fails; both are cached short or not at all', async () => {
@@ -249,4 +256,26 @@ test('each real Goodreads fetch leaves an upstream row, a cache hit a cache_hit 
   assert.deepEqual([JSON.parse(saved[0][4]).kind, JSON.parse(saved[0][4]).result, JSON.parse(saved[1][4])], ['lookup', 'page-refused', { kind: 'lookup' }]);
   await handler(new Request('https://worker.test/search?q=dune', { headers: { origin: ORIGIN } }), env, ctx);
   assert.deepEqual([saved[2][3], JSON.parse(saved[2][4]).kind, JSON.parse(saved[2][4]).result, JSON.parse(saved[2][4]).tries], ['upstream', 'search', 'failed', 1]);
+});
+
+test('/lookup carries the book id of the redirect address, /book does not, and no id is omitted', async () => {
+  const at = (url) => () => Object.defineProperty(new Response(html), 'url', { value: url });
+  const lookup = await setup(at('https://www.goodreads.com/book/show/4214.Life_of_Pi')).get(`?isbn=${ISBN}`);
+  assert.equal((await lookup.json()).bookId, '4214');
+  const none = await setup(at('https://www.goodreads.com/search?q=x')).get(`?isbn=${ISBN}`);
+  assert.equal('bookId' in (await none.json()), false);
+  const book = await setup(at('https://www.goodreads.com/book/show/4214')).request('/book?id=4214');
+  assert.equal('bookId' in (await book.json()), false);
+});
+
+test('the series link comes after the JSON-LD, tens of KB into the page, and is still read', async () => {
+  const link = '<a href="https://www.goodreads.com/series/312023-the-chronicles-of-saylok">The Chronicles of Saylok<!-- --> #1</a><h1 data-testid="bookTitle">';
+  const page = (name) => `${html.replace('"Title"', JSON.stringify(name))}${'<div>filler</div>'.repeat(3000)}${link}${'<div>more</div>'.repeat(3000)}`;
+  const chunked = (text) => { // a real page arrives in chunks: the JSON-LD is complete in the first one
+    const bytes = new TextEncoder().encode(text);
+    return new ReadableStream({ start(c) { for (let i = 0; i < bytes.length; i += 8192) c.enqueue(bytes.slice(i, i + 8192)); c.close(); } });
+  };
+  const { get } = setup(goodreads(chunked(page('Перша дівчинка. Хроніки Сейлока. Книга 1'))));
+  const body = await (await get(`?isbn=${ISBN}`)).json();
+  assert.deepEqual([body.title, body.series], ['Перша дівчинка. Хроніки Сейлока. Книга 1', { name: 'The Chronicles of Saylok', number: '1', url: 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok' }]);
 });

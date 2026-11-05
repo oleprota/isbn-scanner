@@ -52,6 +52,17 @@ export function splitTitle(name) {
   return { title: title.trim(), series };
 }
 
+// The series the page itself names for this book: the link under its title, "The Chronicles of Saylok #1"
+// (it is in the page markup, not in the JSON-LD). `{ name, number, url }` with the series' own Goodreads page, or null.
+// shortcut: reads the first such link of the page (the book's own heading comes before any carousel), upgrade if Goodreads reorders it.
+const SERIES_URL = 'https://www.goodreads.com/series/';
+const SERIES_LINK = /<a href="(https:\/\/www\.goodreads\.com\/series\/[^"]{1,100})"[^>]*>([^<]{1,200})<!-- --> #(\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?)<\/a>/;
+export function pageSeries(html) {
+  const match = SERIES_LINK.exec(html ?? '');
+  const name = match && text(match[2], 80);
+  return name ? { name, number: match[3].replace(/\s+/g, ''), url: match[1] } : null;
+}
+
 const AUTHOR_URL = 'https://www.goodreads.com/author/';
 
 // The first author: { name, url } (the url only when it is a Goodreads author page).
@@ -74,28 +85,46 @@ const findBook = (html) =>
     .find((block) => block?.['@type'] === 'Book');
 
 // The books in Goodreads' search-as-you-type answer (an array): up to 5 of
-// `{ id, title, author, image }`. Entries without an id or a title are dropped.
+// `{ id, title, author, image, rating, ratingCount, bookUrl, authorUrl }`. Entries without an id or a title are dropped.
+// `rating` and `ratingCount` are numbers (0 = unknown); the addresses are absolute Goodreads addresses or ''.
+const BOOK_URL = 'https://www.goodreads.com/book/';
+const goodreadsUrl = (value, prefix) => {
+  if (typeof value !== 'string') return '';
+  const absolute = value.startsWith('/') ? `https://www.goodreads.com${value}` : value;
+  return absolute.startsWith(prefix) ? absolute : '';
+};
 export function parseCandidates(data) {
   if (!Array.isArray(data)) return null;
   return data
-    .map((b) => ({
-      id: String(b?.bookId ?? ''),
-      title: text(b?.bookTitleBare ?? b?.title, 120),
-      author: text(b?.author?.name, 100),
-      image: typeof b?.imageUrl === 'string' && b.imageUrl.startsWith('https://') ? b.imageUrl : '',
-    }))
+    .map((b) => {
+      const rating = Number(b?.avgRating);
+      const count = Number(String(b?.ratingsCount ?? '').replace(/,/g, ''));
+      return {
+        id: String(b?.bookId ?? ''),
+        title: text(b?.bookTitleBare ?? b?.title, 120),
+        author: text(b?.author?.name, 100),
+        image: typeof b?.imageUrl === 'string' && b.imageUrl.startsWith('https://') ? b.imageUrl : '',
+        rating: rating > 0 && rating <= 5 ? rating : 0,
+        ratingCount: Number.isInteger(count) && count > 0 ? count : 0,
+        bookUrl: goodreadsUrl(b?.bookUrl, BOOK_URL),
+        authorUrl: goodreadsUrl(b?.author?.profileUrl, AUTHOR_URL),
+      };
+    })
     .filter((b) => /^\d{1,12}$/.test(b.id) && b.title)
     .slice(0, 5);
 }
 
-// What the answer holds, from the page's Book block (null = no title, no data).
-function readBook(book) {
+// What the answer holds, from the page's Book block (null = no title, no data). The series: the one in the title's brackets
+// keeps its name and number (it is in the edition's language, which is better) and gets the page's address for the series;
+// without one, the series is what the page names. The title only loses its trailing brackets (`splitTitle`), nothing else.
+function readBook(book, html) {
   const name = text(book?.name, 200);
   if (!name) return null;
-  const { title, series } = splitTitle(name);
+  const { title, series: bracket } = splitTitle(name);
+  const page = pageSeries(html);
   return {
     title,
-    series,
+    series: bracket && page ? { ...bracket, url: page.url } : bracket ?? page,
     author: firstAuthor(book.author),
     rating: ratingOf(book.aggregateRating),
     image: typeof book.image === 'string' && book.image.startsWith('https://') ? book.image : '',
@@ -103,13 +132,26 @@ function readBook(book) {
 }
 
 // `{ title, series, author, rating, image }` for the first Book in the page, or null (no title = no data).
-export const parseBook = (html) => readBook(findBook(html));
+export const parseBook = (html) => readBook(findBook(html), html);
 
 // `{ isbn, title, series, author, rating, image }`: the Book of the page with the ISBN of its edition, or null
 // when the page has no valid ISBN. A picked search result is fully described by this one page.
 export function parseEdition(html) {
   const book = findBook(html);
   const isbn = normalizeIsbn(book?.isbn ?? '');
-  const details = readBook(book);
+  const details = readBook(book, html);
   return details && isValidIsbn(isbn) ? { isbn, ...details } : null;
+}
+
+// The Goodreads book id in the address a page was finally served from (".../book/show/4214.Life_of_Pi"), or ''.
+export function bookIdFromUrl(url) {
+  const match = /^https:\/\/www\.goodreads\.com\/book\/show\/(\d{1,12})(?![\d])/.exec(url ?? '');
+  return match ? match[1] : '';
+}
+
+// `parseBook` plus `bookId` (from the address after Goodreads' redirect), when that address has one.
+export function parseLookup(html, finalUrl) {
+  const book = parseBook(html);
+  const bookId = bookIdFromUrl(finalUrl);
+  return book && bookId ? { ...book, bookId } : book;
 }

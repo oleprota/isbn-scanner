@@ -27,7 +27,7 @@ test('returns the cleaned answer and asks for the ISBN', async () => {
     fetchFn: async (url) => { requested = url; return answer(full)(); },
   });
   assert.deepEqual(found, { ...full, title: 'Шлях королів' });
-  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=7`);
+  assert.equal(requested, `${URL_}/lookup?isbn=9786171299412&v=10`);
 });
 
 test('an answer with only a title is fine; missing parts are empty', async () => {
@@ -69,7 +69,9 @@ test('a 429 waits and asks again, then gives up after a few tries', async () => 
 test('a title search asks /search and cleans every candidate; a failure is null, no hits is []', async () => {
   let requested;
   const fetchFn = async (url) => { requested = url; return answer({ results: [{ id: '32740697', title: ' Хірург ', author: 'Tess', image: 'javascript:x' }, { id: 'x', title: 'No id' }, { id: '1', title: '' }] })(); };
-  assert.deepEqual(await searchBooks('Хірург Тесс', { url: URL_, fetchFn }), [{ id: '32740697', title: 'Хірург', author: 'Tess', image: '' }]);
+  assert.deepEqual(await searchBooks('Хірург Тесс', { url: URL_, fetchFn }), [{ id: '32740697', title: 'Хірург', author: 'Tess', image: '', rating: 0, ratingCount: 0, bookUrl: '', authorUrl: '' }]); // an answer without the newer fields is fine
+  const rated = { id: '1', title: 'A', rating: 4.29, ratingCount: 120, bookUrl: 'https://www.goodreads.com/book/show/1', authorUrl: 'https://www.goodreads.com/author/show/2' };
+  assert.deepEqual((await searchBooks('x', { url: URL_, fetchFn: answer({ results: [rated, { ...rated, rating: 9, bookUrl: 'https://evil.example/book/', authorUrl: 'javascript:x' }] }) })).map((b) => [b.rating, b.ratingCount, b.bookUrl, b.authorUrl]), [[4.29, 120, rated.bookUrl, rated.authorUrl], [0, 120, '', '']]);
   assert.equal(requested, `${URL_}/search?q=%D0%A5%D1%96%D1%80%D1%83%D1%80%D0%B3+%D0%A2%D0%B5%D1%81%D1%81`);
   assert.deepEqual(await searchBooks('x', { url: URL_, fetchFn: answer({ results: [] }) }), []);
   for (const fetchFn of [answer({}, 502), answer({ nope: 1 }), async () => { throw new Error('offline'); }]) assert.equal(await searchBooks('x', { url: URL_, fetchFn }), null);
@@ -84,9 +86,22 @@ test('the ISBN of a picked book is asked from /book and checked', async () => {
   assert.equal(await editionOfBook('1', { url: URL_, fetchFn: answer({}, 404) }), null);
 });
 
+test('cleanAnswer passes a valid bookId through and reads answers without one', () => {
+  assert.equal(cleanAnswer({ title: 'T', bookId: '4214' }).bookId, '4214');
+  assert.equal('bookId' in cleanAnswer({ title: 'T' }), false);
+  assert.equal('bookId' in cleanAnswer({ title: 'T', bookId: '<b>' }), false);
+});
+
 test('gives up after the timeout', async () => {
   const slow = (url, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
-  assert.equal(await lookupBook('1', { url: URL_, fetchFn: slow, timeout: 20 }), null);
+  // AbortSignal.timeout() uses an unref'd timer and the fake fetch holds no socket, so without this the event loop looks idle
+  // and node:test cancels the test (and every one after it) while the answer is still pending.
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    assert.equal(await lookupBook('1', { url: URL_, fetchFn: slow, timeout: 20 }), null);
+  } finally {
+    clearInterval(keepAlive);
+  }
 });
 
 test('report also tells why: the worker\'s reason for a 404, the status of an error', async () => {
@@ -142,4 +157,10 @@ test('a rating is thin under THIN_RATING_COUNT, not at it', () => {
   assert.equal(isThin({ value: 4, count: 100 }), false);
   assert.equal(isThin({ value: 4, count: 101 }), false);
   assert.equal(isThin(null), false);
+});
+
+test('a series address is kept only when it is a Goodreads series page', () => {
+  const url = 'https://www.goodreads.com/series/312023-the-chronicles-of-saylok';
+  assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url } }).series, { name: 'S', number: '1', url });
+  assert.deepEqual(cleanAnswer({ title: 'T', series: { name: 'S', number: '1', url: 'javascript:alert(1)' } }).series, { name: 'S', number: '1' });
 });
