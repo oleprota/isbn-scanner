@@ -9,7 +9,8 @@ export const EVENTS = {
   search: ['via', 'ok'],
   lookup: ['result', 'ms', 'reason'],
   title_search: ['n'],
-  title_pick: ['isbn', 'details'],
+  title_pick: ['isbn'], // at click time: 1 when the ISBN was already known
+  isbn_found: ['found', 'result', 'reason', 'ms', 'retry', 'details'], // later: the edition request's answer (retry: 1 = the user's button, 0 = automatic)
   star: ['on'],
   copy: ['list', 'ok'],
   sort: ['list', 'mode'],

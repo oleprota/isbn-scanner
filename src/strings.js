@@ -88,6 +88,11 @@ export const card = {
     };
     return why[outcome === 'missing' ? reason : outcome] ?? why['no-reason'];
   },
+  isbnLabel: 'ISBN',
+  isbnLooking: 'Шукаю ISBN…',
+  isbnNotFound: '(не знайдено)',
+  isbnRetry: 'Спробувати ще раз',
+  isbnRetryTitle: (why) => (why ? `Спробувати ще раз. ${why}` : 'Спробувати ще раз'),
   seriesLabel: 'Серія',
   authorLabel: 'Автор',
   nameLabel: 'Назва книги',

@@ -11,7 +11,7 @@ import { createBookList } from './bookList.js';
 import { NAME_MAX, createBookTitles } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
-import { coverImage, factsBlock, ratingBlock } from './details.js';
+import { coverImage, factsBlock, isbnRows, ratingBlock } from './details.js';
 import { LOOKUP_URL, bookPageUrl, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
@@ -248,8 +248,9 @@ function titleHeading(book, waiting) {
   return { heading, update, setWaiting };
 }
 
-// The card on screen, so that a lookup answer can reach it: { card, book, update, setDetails, setWaiting }.
-// `book` is { id, isbn?, title }: a book picked by title has no ISBN.
+// The card on screen, so that a lookup answer can reach it: { card, book, update, setDetails, setWaiting, refresh, failure }.
+// `book` is { id, isbn?, title }: a book picked by title has no ISBN until its edition request answers (kept in its
+// details). `failure`: this card's own memory of a failed edition request ({ outcome, reason, status }), never stored.
 let shown = null;
 
 function renderBook(book) {
@@ -259,23 +260,36 @@ function renderBook(book) {
   const { heading, update, setWaiting } = titleHeading(book, pending.has(book.id));
   body.append(heading);
   const facts = el('div', null, 'facts-slot');
-  // what the lookup found: the cover beside the title, the rating under it, series and author under the head
+  const links = el('div', null, 'link-row');
+  const self = { card, book, failure: null };
+  // series, author and the ISBN row under the head, and the links: they follow what is known now (the ISBN
+  // may arrive after the card was built, and so may the request's progress)
+  const refresh = () => {
+    const found = titles.details(book.id);
+    const isbn = book.isbn ?? found?.isbn;
+    facts.replaceChildren(factsBlock(found ?? {}, isbnRows({
+      isbn,
+      running: editionsRunning.has(book.id),
+      failed: Boolean(self.failure),
+      why: self.failure && str.card.lookupWhy(self.failure),
+      retry: () => requestEdition(book.id, { retry: true }),
+    })));
+    links.replaceChildren(...isbnLinks(isbn, titles.foundBy(book.id)).map((link) => linkButton(link, { big: true })));
+  };
+  // what the lookup found: the cover beside the title, the rating under it, then the rest
   const setDetails = (found) => {
     head.querySelector('.cover')?.remove();
     if (found?.image) head.prepend(coverImage(found.image));
     body.querySelector('.rating')?.remove();
     if (found?.rating) heading.after(ratingBlock(found.rating));
-    facts.replaceChildren(...[found && factsBlock(found)].filter(Boolean));
+    refresh();
   };
   // the star sits at the right edge of the card, like the buttons at the end of the list rows
   head.append(body, markToggle.create(book));
   setDetails(titles.details(book.id));
-  const links = el('div', null, 'link-row');
-  const refreshLinks = (found) => links.replaceChildren(...isbnLinks(book.isbn, found).map((link) => linkButton(link, { big: true })));
-  refreshLinks(titles.foundBy(book.id));
   card.append(head, facts, links);
   result.replaceChildren(card);
-  shown = { card, book, update, setDetails, setWaiting, refreshLinks };
+  shown = Object.assign(self, { update, setDetails, setWaiting, refresh, refreshLinks: refresh });
 }
 
 // Asks the lookup service for the book's name and cover, in the background: the card, the beep and
@@ -320,17 +334,24 @@ function applyLookup(id, isbn, { bookId, ...found }) {
 
 // The edition request of a book picked by title (`gr:<n>`), in the background: its card and row are already there.
 // The answer replaces the partial details with current ones and stores the ISBN (not shown yet); a book already
-// known by that ISBN is merged into this one. A failure is silent. `onAnswer(edition)` is for the usage stats.
-function requestEdition(id, onAnswer = () => {}) {
+// known by that ISBN is merged into this one. A failure never blocks anything: the card shows "(не знайдено)" with
+// a button (`retry`: the user's) and nothing is remembered, so every card built for the book asks again.
+// The answer is reported once to the usage stats (`isbn_found`).
+function requestEdition(id, { retry = false } = {}) {
   if (!LOOKUP_URL || editionsRunning.has(id) || (titles.detailsCurrent(id) && titles.details(id).isbn)) return;
   editionsRunning.add(id);
-  editionOfBook(id.slice(3)).then((edition) => {
+  let why = {};
+  if (shownCard(id)) shown.refresh();
+  editionOfBook(id.slice(3), { report: (outcome, ms, detail) => { why = { outcome, ms, ...detail }; } }).then((edition) => {
     editionsRunning.delete(id);
-    onAnswer(edition);
-    if (!edition) return;
-    titles.rekey(isbnId(edition.isbn), id);
-    if (edition.found) applyMeta(id, edition.found, edition.isbn);
-    else if (titles.details(id)) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
+    stats.track('isbn_found', { found: edition ? 1 : 0, result: why.outcome, reason: why.reason, ms: why.ms, retry: retry ? 1 : 0, details: edition?.found ? 1 : 0 });
+    if (shownCard(id)) shown.failure = edition ? null : why;
+    if (edition) {
+      titles.rekey(isbnId(edition.isbn), id);
+      if (edition.found) applyMeta(id, edition.found, edition.isbn);
+      else if (titles.details(id)) titles.setDetails(id, titles.details(id), { partial: true, isbn: edition.isbn });
+    }
+    if (shownCard(id)) shown.refresh();
     renderLists();
   });
 }
@@ -609,12 +630,13 @@ function pickCandidate(candidate) {
   clearWarning();
   setStatus('');
   const id = candidateId(candidate);
+  stats.track('title_pick', { isbn: titles.details(id)?.isbn ? 1 : 0 }); // at click time: was the ISBN already known
   titles.setFoundBy(id, { title: candidate.title, author: candidate.author, url: candidate.bookUrl });
   if (!titles.detailsCurrent(id)) titles.setDetails(id, detailsFromCandidate(candidate), { partial: true }); // never replaces full details
   const book = { id, title: titles.of(id) };
   noteScanned(book);
   if (grFromHash(location.hash) !== candidate.id) history.pushState(null, '', hashForGr(candidate.id));
-  requestEdition(id, (edition) => stats.track('title_pick', { isbn: edition ? 1 : 0, details: edition?.found ? 1 : 0 }));
+  requestEdition(id);
   renderBook(book);
   input.blur();
 }
