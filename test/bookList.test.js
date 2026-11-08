@@ -92,3 +92,12 @@ test('the default limit is 1000, and a stored list over the limit is read cut to
   assert.equal(createBookList(memoryStore(stored), 2).list().length, 2);
   assert.equal(createBookList(memoryStore(stored)).limit, 1000);
 });
+
+test('reorder gives each book a rank; books left out go after the others', () => {
+  const books = createBookList(memoryStore());
+  books.add(matilda);
+  books.add(potter);
+  books.reorder([matilda.isbn].map((k) => `isbn:${k}`));
+  const byId = Object.fromEntries(books.list().map((b) => [b.id, b.rank]));
+  assert.deepEqual(byId, { [`isbn:${matilda.isbn}`]: 0, [`isbn:${potter.isbn}`]: 1 });
+});

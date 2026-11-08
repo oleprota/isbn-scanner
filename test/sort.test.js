@@ -51,3 +51,9 @@ test('the choice is remembered per list; bad or missing data means date', () => 
     assert.doesNotThrow(() => saveSort(broken, 'scanned', 'name'));
   }
 });
+
+test('custom follows the ranks; unranked (newer) books stay on top, waiting ones above them', () => {
+  const ranked = [{ id: '1', title: 'a', rank: 2 }, { id: '2', title: 'b' }, { id: '3', title: 'c', rank: 0 }, { id: '4', title: 'd', rank: 1 }];
+  assert.equal(order(sortBooks(ranked, 'custom', ctx())), '2341');
+  assert.equal(order(sortBooks(ranked, 'custom', ctx(['4']))), '4231');
+});

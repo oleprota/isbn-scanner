@@ -142,6 +142,14 @@ const listView = (name, list, own) => createListView({
 const scannedView = listView('scanned', scanned, {
   confirmClear: str.lists.clearScanned,
   rowButton: (book) => markToggle.create(book),
+  removeButton: (book) => {
+    const remove = iconButton('✕', str.lists.removeScanned);
+    remove.addEventListener('click', () => {
+      scanned.remove(book.id);
+      renderLists();
+    });
+    return remove;
+  },
 });
 const markedView = listView('marked', marked, {
   confirmClear: str.lists.clearMarked,
