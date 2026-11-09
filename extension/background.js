@@ -1,8 +1,9 @@
 // Toolbar click (or auto-mode on an opted-in site) -> read the page (content.js) -> pick its ISBN, ask the lookup service -> content.js shows the card.
 // Nothing runs before the click (activeTab) except on sites the user opted in, and only the ISBN leaves the browser, to our own lookup service.
 import { pickIsbn, candidates } from './pickIsbn.js';
+import { titleQuery } from './titleQuery.js';
 import { readDev } from './devMode.js';
-import { THIN_RATING_COUNT, isThin, lookupBook, setNoCache } from './shared/lookup.js';
+import { THIN_RATING_COUNT, lookupBook, searchBooks, setNoCache } from './shared/lookup.js';
 import { isbnLinks, goodreadsSearch } from './shared/links.js';
 import { card as cardTexts, formatRating } from './shared/strings.js';
 import { frame, auto as autoTexts } from './texts.js';
@@ -12,11 +13,12 @@ import { sitePatterns, hostPatterns, sitesFromOrigins } from './sites.js';
 // for the same lookup, silently. It is registered only while the master switch is on.
 
 async function inject(tabId, url, auto) {
+  const { thinCount } = await chrome.storage.sync.get({ thinCount: THIN_RATING_COUNT });
   const patterns = sitePatterns(url);
   const enabled = !!patterns && await chrome.permissions.contains({ origins: patterns });
   const target = { tabId };
-  const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off,
-    thin: cardTexts.thinTitle(THIN_RATING_COUNT), thinLabel: cardTexts.thinLabel, seriesLabel: cardTexts.seriesLabel, authorLabel: cardTexts.authorLabel };
+  const texts = { finding: frame.finding, loading: frame.loading, close: frame.close, problems: frame.problems, pick: frame.pick, back: frame.back, auto, enabled, autoOn: autoTexts.on, autoOff: autoTexts.off, autoOnLabel: autoTexts.onLabel, autoOffLabel: autoTexts.offLabel,
+    thin: cardTexts.thinTitle(thinCount), thinLabel: cardTexts.thinLabel, seriesLabel: cardTexts.seriesLabel, authorLabel: cardTexts.authorLabel };
   await chrome.scripting.executeScript({ target, func: (t) => { globalThis.isbnReaderTexts = t; }, args: [texts] });
   await chrome.scripting.executeScript({ target, files: ['content.js'] });
 }
@@ -103,9 +105,16 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     const isbn = pickIsbn(page);
     // Developer mode (options page; ADR-0003) adds a line of facts to the answer, and its "no cache" check skips the caches.
     const { developer, noCache } = await readDev();
+    const { thinCount } = await chrome.storage.sync.get({ thinCount: THIN_RATING_COUNT });
     setNoCache(developer && noCache);
     const debug = (text) => (developer ? { debug: `dev: ${text}` } : {});
-    if (!isbn) return respond({ problem: 'noIsbn', ...debug('no ISBN found') });
+    if (!isbn) {
+      // A manual click on a page with no ISBN: offer Goodreads' best guesses for its title (ratings come with them; ADR 0005's links).
+      const query = page.fallback && titleQuery(page);
+      const found = query ? await searchBooks(query) : null;
+      if (found?.length) return respond({ picks: found.map((c) => pickCard(c, thinCount)), ...debug(`no ISBN, searched "${query}"`) });
+      return respond({ problem: 'noIsbn', ...debug('no ISBN found') });
+    }
     chrome.tabs.sendMessage(sender.tab.id, { searching: true }).catch(() => {}); // ISBN found: now the Goodreads lookup
     let why, outcome, took, detail;
     const details = await lookupBook(isbn, { report: (o, ms, d) => { [outcome, took, detail] = [o, ms, d]; why = cardTexts.lookupWhy({ outcome: o, ...d }); } });
@@ -113,16 +122,25 @@ chrome.runtime.onMessage.addListener((page, sender, respond) => {
     const facts = debug(`${isbn} · of ${seen} · ${outcome}${Object.keys(detail ?? {}).length ? ` ${JSON.stringify(detail)}` : ''} · ${took} ms`);
     if (!details) return respond({ problem: 'lookup', message: why, ...facts });
     const links = isbnLinks(isbn).map(({ name, url, title, icon }) => ({ name, url, title, icon: chrome.runtime.getURL(icon) }));
-    respond({ ...facts, card: { ...details, isbn, links, rating: shapeRating(details.rating), seriesUrl: details.series && (details.series.url || goodreadsSearch(details.series.name)) } });
+    respond({ ...facts, card: { ...details, isbn, links, rating: shapeRating(details.rating, thinCount), seriesUrl: details.series && (details.series.url || goodreadsSearch(details.series.name)) } });
   })();
   return true; // the answer comes later
 });
 
+// A title-search result as a card (no ISBN: links go by search or page, see isbnLinks)
+const pickCard = (c, thinCount) => ({
+  title: c.title,
+  image: c.image,
+  author: c.author ? { name: c.author, url: c.authorUrl } : null,
+  rating: shapeRating(c.rating > 0 && c.ratingCount > 0 ? { value: c.rating, count: c.ratingCount } : null, thinCount),
+  links: isbnLinks(null, { title: c.title, author: c.author, url: c.bookUrl }).map((l) => ({ ...l, icon: chrome.runtime.getURL(l.icon) })),
+});
+
 // A rating as the card shows it: the formatted value and count, its tooltip, and whether it is thin (orange, with a warning).
-const shapeRating = (rating) => {
+const shapeRating = (rating, thinCount) => {
   if (!rating) return null;
   const { value, count } = formatRating(rating);
-  return { value, count, title: frame.ratingTitle(value, count), thin: isThin(rating) };
+  return { value, count, title: frame.ratingTitle(value, count), thin: rating.count < thinCount };
 };
 
 // The card's link: opt the site out right away, or open grant.html to opt it in (Chrome allows the permission prompt
