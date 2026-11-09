@@ -3,7 +3,7 @@
 import { el } from "./dom.js";
 import { card, formatRating } from "./strings.js";
 import { goodreadsSearch } from "./links.js";
-import { THIN_RATING_COUNT, isThin } from "./lookup.js";
+import { getThinCount, isThin } from "./lookup.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 
@@ -44,7 +44,7 @@ export function ratingBlock(rating) {
 // The warning beside a thin count: a button that opens a native popover (no layout shift: it floats in the top layer)
 // with the reason. Light dismiss (a tap outside) and Escape close it.
 export function thinButton() {
-  const text = card.thinTitle(THIN_RATING_COUNT);
+  const text = card.thinTitle(getThinCount());
   const button = el("button", "⚠\uFE0E", "thin-warning");
   button.type = "button";
   button.setAttribute("aria-label", `${card.thinLabel}: ${text}`);

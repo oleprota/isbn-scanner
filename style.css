@@ -109,6 +109,7 @@ button:disabled {
 }
 button:focus-visible,
 #isbn:focus-visible,
+.settings input:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -795,3 +796,56 @@ body:has(#scanner:not([hidden])) #status:empty {
   height: 1.17rem;
   border-width: 2.5px;
 } /* 30% larger than the default .9rem */
+/* Settings pane: the threshold stepper; the number is a field that looks like text, with a dashed underline to show it can be tapped */
+.setting-label {
+  margin: 0.5rem 0;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.stepper-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+/* The number and its field share one box, so nothing moves when editing starts. The line is the title's. */
+.stepper-value,
+.stepper-input {
+  box-sizing: border-box;
+  width: 6rem;
+  height: 2.125rem;
+  padding: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.stepper-value {
+  background: none;
+  color: inherit;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 0.22em;
+}
+.stepper-input {
+  border-color: var(--link);
+  background: var(--bg);
+  color: var(--fg);
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.stepper-input::-webkit-inner-spin-button,
+.stepper-input::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
