@@ -52,7 +52,6 @@ test('rename changes the title of a marked book and ignores others', () => {
   assert.deepEqual(marked.list().map((b) => b.title), [potter.title, 'My Matilda']);
 });
 
-
 test('bump adds a new book at the top, and moves an existing one up with its new title', () => {
   const list = createBookList(memoryStore());
   list.add(matilda, new Date('2026-10-23T10:00:00Z'));

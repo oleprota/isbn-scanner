@@ -7,13 +7,13 @@
   const t = globalThis.isbnReaderTexts;
   const box = (tag, text, className) =>
     Object.assign(document.createElement(tag), {
-      textContent: text ?? "",
-      className: className ?? "",
+      textContent: text ?? '',
+      className: className ?? '',
     });
 
-  const host = document.createElement("div");
-  const root = host.attachShadow({ mode: "closed" });
-  const style = document.createElement("style");
+  const host = document.createElement('div');
+  const root = host.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
   style.textContent = `
     :host { all: initial; }
     .frame { --card: #fffdf8; --fg: #2a2823; --muted: #5e5a50; --link: #2f6f6b; --accent: #2f6f6b; --line: #e4dcc9; --error: #b32942; --star: #b7791f; --thin: #b34a00;
@@ -40,13 +40,13 @@
     .wait { align-items: center; padding: 8px 12px; }
     .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: var(--accent); border-radius: 50%; animation: turn .8s linear infinite; }
     @keyframes turn { to { transform: rotate(360deg); } }`;
-  const frame = box("div", null, "frame");
-  frame.role = "dialog";
-  const spinner = box("span", null, "spinner");
-  spinner.role = "status";
-  spinner.setAttribute("aria-label", t.finding);
-  frame.classList.add("wait");
-  const label = box("span", t.finding);
+  const frame = box('div', null, 'frame');
+  frame.role = 'dialog';
+  const spinner = box('span', null, 'spinner');
+  spinner.role = 'status';
+  spinner.setAttribute('aria-label', t.finding);
+  frame.classList.add('wait');
+  const label = box('span', t.finding);
   frame.append(spinner, label);
   // background.js says when the ISBN is found and the Goodreads lookup starts
   let siteButton; // the card's auto-search link, once there is a card
@@ -55,7 +55,7 @@
     if (!siteButton) return;
     siteButton.textContent = enabled ? t.autoOff : t.autoOn;
     siteButton.setAttribute(
-      "aria-label",
+      'aria-label',
       enabled ? t.autoOffLabel : t.autoOnLabel,
     );
   };
@@ -69,7 +69,7 @@
       if (t.auto && !closed) document.documentElement.append(host);
       /* auto-mode shows itself only now, once the ISBN is found */ label.textContent =
         t.loading;
-      spinner.setAttribute("aria-label", t.loading);
+      spinner.setAttribute('aria-label', t.loading);
     }
   };
   chrome.runtime.onMessage.addListener(onSearching);
@@ -81,36 +81,36 @@
     closed = true;
     chrome.runtime.onMessage.removeListener(onSearching);
     host.remove();
-    removeEventListener("keydown", onKey, true);
-    globalThis.navigation?.removeEventListener("navigatesuccess", close);
+    removeEventListener('keydown', onKey, true);
+    globalThis.navigation?.removeEventListener('navigatesuccess', close);
   };
   const onKey = (event) => {
-    if (event.key === "Escape") close();
+    if (event.key === 'Escape') close();
   };
-  addEventListener("keydown", onKey, true);
+  addEventListener('keydown', onKey, true);
   globalThis.isbnReaderClose = close;
-  globalThis.navigation?.addEventListener("navigatesuccess", close); // another page (also in-page navigation and Back): the card is no longer about this page
+  globalThis.navigation?.addEventListener('navigatesuccess', close); // another page (also in-page navigation and Back): the card is no longer about this page
 
   const allText = () => {
     const body = document.body.cloneNode(true);
-    body.querySelectorAll("script, style, noscript").forEach((n) => n.remove());
+    body.querySelectorAll('script, style, noscript').forEach((n) => n.remove());
     return body.textContent;
   };
   const read = (selector, attr, doc) =>
     [...doc.querySelectorAll(selector)]
-      .map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? "")
+      .map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '')
       .filter(Boolean);
   // A single-page shop swaps the content without reloading, so the page's head and data scripts still describe the
   // book it was first loaded with. When the address is no longer the loaded one, the head data is read from a fresh
   // copy of this same page (one request to the site the user is on); if that fails, from the visible page only.
   const loaded =
-    performance.getEntriesByType("navigation")[0]?.name ?? location.href;
+    performance.getEntriesByType('navigation')[0]?.name ?? location.href;
   let data = document;
-  if (loaded.split("#")[0] !== location.href.split("#")[0]) {
-    data = await fetch(location.href, { credentials: "same-origin" })
+  if (loaded.split('#')[0] !== location.href.split('#')[0]) {
+    data = await fetch(location.href, { credentials: 'same-origin' })
       .then((response) => response.text())
-      .then((html) => new DOMParser().parseFromString(html, "text/html"))
-      .catch(() => new DOMParser().parseFromString("", "text/html"));
+      .then((html) => new DOMParser().parseFromString(html, 'text/html'))
+      .catch(() => new DOMParser().parseFromString('', 'text/html'));
   }
   const { card, picks, problem, message, debug } = (await chrome.runtime
     .sendMessage({
@@ -118,7 +118,7 @@
       meta: [
         ...read(
           'meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]',
-          "content",
+          'content',
           data,
         ),
         ...read('[itemprop="isbn"]:not(meta)', null, data),
@@ -127,32 +127,32 @@
         document.title,
         ...read(
           'meta[property="og:title"], meta[property="og:description"]',
-          "content",
+          'content',
           data,
         ),
       ],
       // the page's text including hidden tabs (shops keep the specs tab, with its ISBN, hidden), then its JSON data
       fallback: !t.auto, // a manual click may fall back to a title search (background.js)
       text: [allText(), ...read('script[type="application/json"]', null, data)]
-        .join("\n")
+        .join('\n')
         .slice(0, 400000),
     })
-    .catch(() => ({ problem: "extension" }))) ?? { problem: "extension" };
+    .catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
   if (closed) return; // closed while waiting
   if (t.auto) {
-    if (problem === "noIsbn") return close(); // silent when there is no book here
+    if (problem === 'noIsbn') return close(); // silent when there is no book here
     document.documentElement.append(host);
   }
 
   frame.replaceChildren();
-  frame.classList.remove("wait");
+  frame.classList.remove('wait');
   if (!card && !picks) {
-    frame.classList.add("none");
+    frame.classList.add('none');
     frame.append(
-      box("span", message ?? t.problems[problem] ?? t.problems.error),
+      box('span', message ?? t.problems[problem] ?? t.problems.error),
     );
     if (debug) {
-      frame.append(box("small", debug));
+      frame.append(box('small', debug));
       return;
     } // developer mode: stays until closed
     setTimeout(close, 6000);
@@ -160,26 +160,26 @@
   }
   const showCard = (card, back) => {
     frame.replaceChildren();
-    frame.classList.remove("wait", "none");
+    frame.classList.remove('wait', 'none');
     if (card.image) {
-      const img = document.createElement("img");
+      const img = document.createElement('img');
       img.src = card.image; // already limited to https:// by cleanAnswer
-      img.alt = "";
-      img.className = "cover";
+      img.alt = '';
+      img.className = 'cover';
       frame.append(img);
     }
-    const body = box("div", null, "body");
-    body.append(box("div", card.title, "title"));
+    const body = box('div', null, 'body');
+    body.append(box('div', card.title, 'title'));
     const fact = (label, name, url, suffix) => {
       // like the app's series and author lines: the name links to Goodreads
-      const line = box("div", null, "meta");
+      const line = box('div', null, 'meta');
       line.append(`${label}: `);
       if (url) {
         // urls come from our own service, checked in cleanAnswer, or built in background.js
-        const a = box("a", name);
+        const a = box('a', name);
         a.href = url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
         line.append(a);
       } else line.append(name);
       if (suffix) line.append(` #${suffix}`);
@@ -190,32 +190,32 @@
     if (card.author) fact(t.authorLabel, card.author.name, card.author.url);
     const ratingBox = (r) => {
       // like the app: gold star, big number, small count (orange, with a warning popover, when thin)
-      const rating = box("div", null, "rating");
+      const rating = box('div', null, 'rating');
       rating.title = r.title;
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", "0 0 24 24");
-      svg.setAttribute("aria-hidden", "true");
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
       const path = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "path",
+        'http://www.w3.org/2000/svg',
+        'path',
       );
       path.setAttribute(
-        "d",
-        "M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z",
+        'd',
+        'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z',
       );
       svg.append(path);
-      const count = box("span", null, r.thin ? "count thin" : "count"); // the count and its warning are one block
-      count.append(box("span", `(${r.count})`));
-      rating.append(svg, box("strong", r.value), count);
+      const count = box('span', null, r.thin ? 'count thin' : 'count'); // the count and its warning are one block
+      count.append(box('span', `(${r.count})`));
+      rating.append(svg, box('strong', r.value), count);
       if (r.thin) {
-        const warning = box("button", "⚠\uFE0E", "warning");
-        warning.type = "button";
-        warning.setAttribute("aria-label", `${t.thinLabel}: ${t.thin}`);
-        const popover = box("div", t.thin, "popover");
-        popover.popover = "auto";
+        const warning = box('button', '⚠\uFE0E', 'warning');
+        warning.type = 'button';
+        warning.setAttribute('aria-label', `${t.thinLabel}: ${t.thin}`);
+        const popover = box('div', t.thin, 'popover');
+        popover.popover = 'auto';
         warning.popoverTargetElement = popover;
-        popover.addEventListener("beforetoggle", (event) => {
-          if (event.newState !== "open") return;
+        popover.addEventListener('beforetoggle', (event) => {
+          if (event.newState !== 'open') return;
           const at = warning.getBoundingClientRect();
           popover.style.top = `${at.bottom + 6}px`;
           popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 180 - 8))}px`;
@@ -225,22 +225,22 @@
       return rating;
     };
     if (card.rating) body.append(ratingBox(card.rating));
-    const links = box("div", null, "links");
+    const links = box('div', null, 'links');
     for (const { name, url, title, icon } of card.links) {
-      const link = box("a");
-      const img = document.createElement("img");
+      const link = box('a');
+      const img = document.createElement('img');
       img.src = icon; // our own copy of the site's icon (see icons/README.md)
-      img.alt = "";
+      img.alt = '';
       link.append(img, name);
       link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
       link.title = title;
       links.append(link);
     }
     body.append(links);
-    if (debug) body.append(box("small", debug, "meta"));
-    const site = box("button", t.enabled ? t.autoOff : t.autoOn, "site");
+    if (debug) body.append(box('small', debug, 'meta'));
+    const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
     siteButton = site;
     showSite(t.enabled);
     site.onclick = async () => {
@@ -251,40 +251,40 @@
     };
     body.append(site);
     if (back) {
-      const list = box("button", t.back, "site");
-      list.type = "button";
+      const list = box('button', t.back, 'site');
+      list.type = 'button';
       list.onclick = back;
       body.append(list);
     }
     frame.append(body, x);
   };
-  const x = box("button", "×", "close");
-  x.setAttribute("aria-label", t.close);
+  const x = box('button', '×', 'close');
+  x.setAttribute('aria-label', t.close);
   x.onclick = close;
   if (!picks) return showCard(card);
   const showPicks = () => {
     frame.replaceChildren();
-    const list = box("div", null, "body");
-    list.append(box("div", t.pick, "meta"));
+    const list = box('div', null, 'body');
+    list.append(box('div', t.pick, 'meta'));
     for (const pick of picks) {
-      const item = box("button", null, "pick");
-      item.type = "button";
+      const item = box('button', null, 'pick');
+      item.type = 'button';
       if (pick.image) {
-        const img = document.createElement("img");
+        const img = document.createElement('img');
         img.src = pick.image;
-        img.alt = "";
-        img.className = "thumb";
+        img.alt = '';
+        img.className = 'thumb';
         item.append(img);
       }
-      const text = box("span", null, "body");
+      const text = box('span', null, 'body');
       text.append(
-        box("div", pick.title, "title"),
+        box('div', pick.title, 'title'),
         box(
-          "div",
+          'div',
           [pick.author?.name, pick.rating && `★ ${pick.rating.value}`]
             .filter(Boolean)
-            .join(" · "),
-          "meta",
+            .join(' · '),
+          'meta',
         ),
       );
       item.append(text);

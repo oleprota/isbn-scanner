@@ -4,8 +4,14 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check:syntax": "git ls-files --cached --others --exclude-standard -z '*.js' '*.mjs' ':!vendor' | xargs -0 -n1 sh -c '[ ! -f \"$0\" ] || node --check \"$0\"'",
     "check:tests": "node --test --test-reporter=./scripts/failures-reporter.mjs",
-    "check": "npm run check:syntax && npm run check:tests"
+    "check": "npm run check:lint && npm run check:tests",
+    "check:lint": "eslint . --no-cache"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
   }
 }

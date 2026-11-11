@@ -12,5 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
+      - run: npm ci
       - name: Check
         run: npm run check

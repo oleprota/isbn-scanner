@@ -178,7 +178,6 @@ input.addEventListener('input', () => {
   clearWarning();
 });
 
-
 // The title on a card is also where the book is named: tap it to type a name (Enter or leaving
 // the field saves, Escape cancels); an empty name goes back to `ISBN <number>`. The name is saved
 // per book and also updates the Scanned and Marked entries for that book.
