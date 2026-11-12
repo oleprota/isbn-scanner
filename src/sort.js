@@ -1,6 +1,8 @@
 // How a list is ordered: `date` is the list's own order (the newest on top), `name` is A-Z,
-// `rating` puts the highest first (no rating counts as 0). The choice is remembered per list.
-export const SORTS = ['date', 'name', 'rating'];
+// `rating` puts the highest first (no rating counts as 0), `custom` is the user's own order from edit mode
+// (the `rank` of each book; books without one, i.e. added since, stay on top in list order).
+// The choice is remembered per list.
+export const SORTS = ['date', 'name', 'rating', 'custom'];
 
 const KEY = 'isbn-reader.sort';
 const collator = new Intl.Collator('uk', { sensitivity: 'base', numeric: true });
@@ -11,6 +13,11 @@ export function sortBooks(books, mode, { ratingOf, isWaiting }) {
   if (mode === 'date') return books;
   const waiting = books.filter((b) => isWaiting(b.id));
   const rest = books.filter((b) => !isWaiting(b.id));
+  if (mode === 'custom') {
+    const unranked = rest.filter((b) => typeof b.rank !== 'number');
+    const ranked = rest.filter((b) => typeof b.rank === 'number').sort((a, b) => a.rank - b.rank);
+    return [...waiting, ...unranked, ...ranked];
+  }
   rest.sort(mode === 'name' ? (a, b) => collator.compare(a.title, b.title) : (a, b) => ratingOf(b.id) - ratingOf(a.id));
   return [...waiting, ...rest];
 }

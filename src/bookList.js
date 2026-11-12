@@ -51,6 +51,15 @@ export function createBookList(store, limit = LIST_LIMIT) {
       const next = rekeyList(read(), fromId, newId, (_from, to) => to);
       if (next) store.write(next);
     },
+    // The user's own order (the "custom" sort): `ids` are the book ids in the order to keep. Each entry gets a
+    // `rank` (its place); books not in `ids` go after them. The list itself stays newest first.
+    reorder(ids) {
+      const books = read();
+      const place = new Map(ids.map((id, i) => [id, i]));
+      const rest = books.filter((e) => !place.has(e.id)).map((e) => e.id);
+      const rank = new Map([...ids.filter((id) => books.some((e) => e.id === id)), ...rest].map((id, i) => [id, i]));
+      store.write(books.map((e) => ({ ...e, rank: rank.get(e.id) })));
+    },
     clear() {
       store.write([]);
     },

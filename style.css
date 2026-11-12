@@ -640,14 +640,36 @@ body:has(#scanner:not([hidden])) #status:empty {
   cursor: pointer;
   font-weight: 600;
   line-height: 2.25rem;
-  padding-right: 2.75rem;
+  padding-right: 5.25rem;
 }
 /* The sort button sits at the right edge of the header; its menu drops under it. */
-.book-list .sort-button {
+.book-list .sort-button,
+.book-list .edit-button {
   position: absolute;
   right: 0;
   top: 0;
   font-weight: 400;
+}
+.book-list .edit-button {
+  right: 2.5rem;
+}
+.book-list .edit-button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.book-list .drag-handle {
+  flex: none;
+  min-width: 1.75rem;
+  margin-left: -0.4rem;
+  touch-action: none;
+  cursor: grab;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+.book-list li.dragging {
+  background: var(--line);
+  cursor: grabbing;
 }
 .sort-menu {
   position: absolute;
