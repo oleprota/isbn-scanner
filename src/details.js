@@ -3,7 +3,7 @@
 import { el } from './dom.js';
 import { card, formatRating } from './strings.js';
 import { goodreadsSearch } from './links.js';
-import { THIN_RATING_COUNT, isThin } from './lookup.js';
+import { getThinCount, isThin } from './lookup.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -13,7 +13,10 @@ function starIcon() {
   svg.setAttribute('class', 'rating-star');
   svg.setAttribute('aria-hidden', 'true'); // the number next to it says it
   const path = document.createElementNS(SVG, 'path');
-  path.setAttribute('d', 'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z');
+  path.setAttribute(
+    'd',
+    'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z',
+  );
   svg.append(path);
   return svg;
 }
@@ -23,11 +26,17 @@ export function ratingBlock(rating) {
   const { value, count } = formatRating(rating);
   const block = el('p', null, 'rating');
   block.title = card.ratingTitle(value, count);
-  const countText = el('span', `(${count})`, 'rating-count');
-  block.append(starIcon(), el('span', `${card.ratingLabel}: `, 'sr-only'), el('strong', value, 'rating-value'), countText);
+  const countBlock = el('span', null, 'rating-count'); // the count and, when thin, its warning are one block
+  countBlock.append(el('span', `(${count})`));
+  block.append(
+    starIcon(),
+    el('span', `${card.ratingLabel}: `, 'sr-only'),
+    el('strong', value, 'rating-value'),
+    countBlock,
+  );
   if (isThin(rating)) {
-    countText.classList.add('thin');
-    block.append(thinButton());
+    countBlock.classList.add('thin');
+    countBlock.append(thinButton());
   }
   return block;
 }
@@ -35,7 +44,7 @@ export function ratingBlock(rating) {
 // The warning beside a thin count: a button that opens a native popover (no layout shift: it floats in the top layer)
 // with the reason. Light dismiss (a tap outside) and Escape close it.
 export function thinButton() {
-  const text = card.thinTitle(THIN_RATING_COUNT);
+  const text = card.thinTitle(getThinCount());
   const button = el('button', '⚠\uFE0E', 'thin-warning');
   button.type = 'button';
   button.setAttribute('aria-label', `${card.thinLabel}: ${text}`);
@@ -46,7 +55,7 @@ export function thinButton() {
     if (event.newState !== 'open') return;
     const at = button.getBoundingClientRect(); // below the icon, kept inside the window
     popover.style.top = `${at.bottom + 6}px`;
-    popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 224 - 8))}px`;
+    popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 180 - 8))}px`;
   });
   const wrap = el('span', null, 'thin-wrap');
   wrap.append(button, popover);
@@ -86,13 +95,18 @@ export function factsBlock({ series, author } = {}, isbn = []) {
   const facts = el('dl', null, 'facts');
   if (series) {
     const value = el('dd');
-    value.append(outsideLink(series.url ?? goodreadsSearch(series.name), series.name));
-    if (series.number) value.append(el('span', ` #${series.number}`, 'series-number'));
+    value.append(
+      outsideLink(series.url ?? goodreadsSearch(series.name), series.name),
+    );
+    if (series.number)
+      value.append(el('span', ` #${series.number}`, 'series-number'));
     facts.append(el('dt', card.seriesLabel), value);
   }
   if (author) {
     const value = el('dd');
-    value.append(author.url ? outsideLink(author.url, author.name) : author.name);
+    value.append(
+      author.url ? outsideLink(author.url, author.name) : author.name,
+    );
     facts.append(el('dt', card.authorLabel), value);
   }
   facts.append(...isbn);

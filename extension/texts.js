@@ -3,19 +3,25 @@ export const frame = {
   // why there is no card, by `problem` (see background.js); a failed lookup carries its own message (card.lookupWhy in shared/strings.js)
   problems: {
     noIsbn: 'Не бачу ISBN. Це точно сторінка книги? 🥸',
-    extension: 'Розширення не відповідає (фоновий скрипт) 😴',
+    extension: 'Розширення не відповідає 😴',
   },
   close: 'Закрити',
-  finding: 'Шукаю книгу… 🔍', // reading the page for its ISBN
+  pick: 'Не бачу ISBN. Це одна з цих книг?',
+  back: '← До списку',
+  finding: 'Шукаю ISBN… 🔍', // reading the page for its ISBN
   loading: 'Шукаю книгу на Goodreads… 🔍',
-  ratingTitle: (value, count) => `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
+  ratingTitle: (value, count) =>
+    `Рейтинг на Goodreads: ${value} з 5, ${count} оцінок`,
 };
 
 export const auto = {
   menu: (on) => (on ? '✅ Автопошук книг' : '🚫 Автопошук книг'), // the icon's menu can't show a checkmark, so the title carries the state
-  menuSite: (on) => (on ? '✅ Автопошук на цьому сайті' : '🚫 Автопошук на цьому сайті'),
+  menuSite: (on) =>
+    on ? '✅ Автопошук на цьому сайті' : '🚫 Автопошук на цьому сайті',
   on: '🚫 Автопошук на цьому сайті',
   off: '✅ Автопошук на цьому сайті',
+  onLabel: 'Натисніть, щоб увімкнути', // the card's link says the state; its label says what a click does
+  offLabel: 'Натисніть, щоб вимкнути',
 };
 
 export const options = {
@@ -24,6 +30,9 @@ export const options = {
   sites: 'Сайти з автопошуком',
   empty: 'Поки жодного. Натисніть «Автопошук на цьому сайті» на картці книги.',
   remove: 'Прибрати',
+  thin: 'Мало оцінок — це менше, ніж:',
+  thinHelp:
+    'Якщо в книги мало оцінок на Goodreads, я вважатиму її рейтинг ненадійним і попереджу про це.',
   developer: 'Режим розробника (на 1 годину)',
   devCache: 'Не брати відповіді з кешу',
 };

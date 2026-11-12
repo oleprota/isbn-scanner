@@ -140,7 +140,17 @@ export const lists = {
   copyThin: '⚠', // in the copied text: after a thin rating's count
 };
 
-const groups = { page, theme, search, scanner, card, lists };
+export const settings = {
+  title: 'Налаштування',
+  thin: {
+    label: 'Попереджати, якщо оцінок менше ніж',
+    help: 'Такий рейтинг позначається ⚠.',
+    less: 'Менше',
+    more: 'Більше',
+  },
+};
+
+const groups = { page, theme, settings, search, scanner, card, lists };
 
 // Resolves "group.key.sub" from a data-s* attribute in index.html; undefined if it is not there.
 export const lookup = (path) => path.split('.').reduce((o, k) => o?.[k], groups);

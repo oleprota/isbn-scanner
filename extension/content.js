@@ -5,7 +5,11 @@
 (async () => {
   globalThis.isbnReaderClose?.(); // a second click replaces the first frame
   const t = globalThis.isbnReaderTexts;
-  const box = (tag, text, className) => Object.assign(document.createElement(tag), { textContent: text ?? '', className: className ?? '' });
+  const box = (tag, text, className) =>
+    Object.assign(document.createElement(tag), {
+      textContent: text ?? '',
+      className: className ?? '',
+    });
 
   const host = document.createElement('div');
   const root = host.attachShadow({ mode: 'closed' });
@@ -23,13 +27,15 @@
     a img { width: 16px; height: 16px; border-radius: 3px; }
     .site { margin-top: 6px; padding: 0; border: 0; background: none; text-decoration: underline; cursor: pointer; }
     button.close { position: absolute; top: 2px; right: 6px; border: 0; background: none; color: inherit; font-size: 20px; cursor: pointer; }
-    .rating { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--accent); }
+    .rating { display: flex; align-items: center; gap: 6px; margin-top: 20px; color: var(--accent); }
     .rating svg { flex: none; width: 18px; height: 18px; fill: var(--star); }
     .rating strong { font-size: 26px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-    .rating .count { align-self: flex-end; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .rating .count { display: flex; align-items: center; gap: 4px; align-self: flex-end; font-size: 13px; line-height: 18px; color: var(--muted); font-variant-numeric: tabular-nums; }
     .rating .count.thin { color: var(--thin); }
-    .rating .warning { align-self: flex-end; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--thin); font-size: 15px; line-height: 1; cursor: pointer; }
-    .popover { position: fixed; inset: auto; margin: 0; max-width: 200px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--thin); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 13px; }
+    .rating .warning { width: 18px; height: 18px; padding: 0; border: 0; background: none; color: var(--thin); font-size: 13px; line-height: 18px; cursor: pointer; transform: translateY(1.5px); }
+    .popover { position: fixed; inset: auto; margin: 0; max-width: 180px; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--thin); border-radius: 8px; background: var(--card); color: var(--fg); font-size: 13px; }
+    .pick { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .thumb { width: 32px; height: 48px; object-fit: cover; border-radius: 3px; flex: none; }
     .none { padding: 8px 12px; }
     .wait { align-items: center; padding: 8px 12px; }
     .spinner { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid #8885; border-top-color: var(--accent); border-radius: 50%; animation: turn .8s linear infinite; }
@@ -44,10 +50,28 @@
   frame.append(spinner, label);
   // background.js says when the ISBN is found and the Goodreads lookup starts
   let siteButton; // the card's auto-search link, once there is a card
-  const showSite = (enabled) => { if (siteButton) siteButton.textContent = enabled ? t.autoOff : t.autoOn; };
+  const showSite = (enabled) => {
+    // the text says the state after the click; the label says what the click does
+    if (!siteButton) return;
+    siteButton.textContent = enabled ? t.autoOff : t.autoOn;
+    siteButton.setAttribute(
+      'aria-label',
+      enabled ? t.autoOffLabel : t.autoOnLabel,
+    );
+  };
   const onSearching = (message) => {
-    if (message?.siteChanged) chrome.runtime.sendMessage({ siteState: true }).then((answer) => answer && showSite(answer.enabled)).catch(() => {}); // added or removed by the grant page, the menu or the options
-    if (message?.searching) { if (t.auto && !closed) document.documentElement.append(host); /* auto-mode shows itself only now, once the ISBN is found */ label.textContent = t.loading; spinner.setAttribute('aria-label', t.loading); } };
+    if (message?.siteChanged)
+      chrome.runtime
+        .sendMessage({ siteState: true })
+        .then((answer) => answer && showSite(answer.enabled))
+        .catch(() => {}); // added or removed by the grant page, the menu or the options
+    if (message?.searching) {
+      if (t.auto && !closed) document.documentElement.append(host);
+      /* auto-mode shows itself only now, once the ISBN is found */ label.textContent =
+        t.loading;
+      spinner.setAttribute('aria-label', t.loading);
+    }
+  };
   chrome.runtime.onMessage.addListener(onSearching);
   root.append(style, frame);
   if (!t.auto) document.documentElement.append(host); // auto-mode stays invisible until it has something to say
@@ -60,7 +84,9 @@
     removeEventListener('keydown', onKey, true);
     globalThis.navigation?.removeEventListener('navigatesuccess', close);
   };
-  const onKey = (event) => { if (event.key === 'Escape') close(); };
+  const onKey = (event) => {
+    if (event.key === 'Escape') close();
+  };
   addEventListener('keydown', onKey, true);
   globalThis.isbnReaderClose = close;
   globalThis.navigation?.addEventListener('navigatesuccess', close); // another page (also in-page navigation and Back): the card is no longer about this page
@@ -70,11 +96,15 @@
     body.querySelectorAll('script, style, noscript').forEach((n) => n.remove());
     return body.textContent;
   };
-  const read = (selector, attr, doc) => [...doc.querySelectorAll(selector)].map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '').filter(Boolean);
+  const read = (selector, attr, doc) =>
+    [...doc.querySelectorAll(selector)]
+      .map((n) => (attr ? n.getAttribute(attr) : n.textContent) ?? '')
+      .filter(Boolean);
   // A single-page shop swaps the content without reloading, so the page's head and data scripts still describe the
   // book it was first loaded with. When the address is no longer the loaded one, the head data is read from a fresh
   // copy of this same page (one request to the site the user is on); if that fails, from the visible page only.
-  const loaded = performance.getEntriesByType('navigation')[0]?.name ?? location.href;
+  const loaded =
+    performance.getEntriesByType('navigation')[0]?.name ?? location.href;
   let data = document;
   if (loaded.split('#')[0] !== location.href.split('#')[0]) {
     data = await fetch(location.href, { credentials: 'same-origin' })
@@ -82,16 +112,32 @@
       .then((html) => new DOMParser().parseFromString(html, 'text/html'))
       .catch(() => new DOMParser().parseFromString('', 'text/html'));
   }
-  const { card, problem, message, debug } = (await chrome.runtime.sendMessage({
-    jsonLd: read('script[type="application/ld+json"]', null, data),
-    meta: [
-      ...read('meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]', 'content', data),
-      ...read('[itemprop="isbn"]:not(meta)', null, data),
-    ],
-    title: [document.title, ...read('meta[property="og:title"], meta[property="og:description"]', 'content', data)],
-    // the page's text including hidden tabs (shops keep the specs tab, with its ISBN, hidden), then its JSON data
-    text: [allText(), ...read('script[type="application/json"]', null, data)].join('\n').slice(0, 400000),
-  }).catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
+  const { card, picks, problem, message, debug } = (await chrome.runtime
+    .sendMessage({
+      jsonLd: read('script[type="application/ld+json"]', null, data),
+      meta: [
+        ...read(
+          'meta[property="books:isbn"], meta[property="og:isbn"], meta[name="isbn"], meta[itemprop="isbn"]',
+          'content',
+          data,
+        ),
+        ...read('[itemprop="isbn"]:not(meta)', null, data),
+      ],
+      title: [
+        document.title,
+        ...read(
+          'meta[property="og:title"], meta[property="og:description"]',
+          'content',
+          data,
+        ),
+      ],
+      // the page's text including hidden tabs (shops keep the specs tab, with its ISBN, hidden), then its JSON data
+      fallback: !t.auto, // a manual click may fall back to a title search (background.js)
+      text: [allText(), ...read('script[type="application/json"]', null, data)]
+        .join('\n')
+        .slice(0, 400000),
+    })
+    .catch(() => ({ problem: 'extension' }))) ?? { problem: 'extension' };
   if (closed) return; // closed while waiting
   if (t.auto) {
     if (problem === 'noIsbn') return close(); // silent when there is no book here
@@ -100,87 +146,152 @@
 
   frame.replaceChildren();
   frame.classList.remove('wait');
-  if (!card) {
+  if (!card && !picks) {
     frame.classList.add('none');
-    frame.append(box('span', message ?? t.problems[problem] ?? t.problems.error));
-    if (debug) { frame.append(box('small', debug)); return; } // developer mode: stays until closed
+    frame.append(
+      box('span', message ?? t.problems[problem] ?? t.problems.error),
+    );
+    if (debug) {
+      frame.append(box('small', debug));
+      return;
+    } // developer mode: stays until closed
     setTimeout(close, 6000);
     return;
   }
-  if (card.image) {
-    const img = document.createElement('img');
-    img.src = card.image; // already limited to https:// by cleanAnswer
-    img.alt = '';
-    img.className = 'cover';
-    frame.append(img);
-  }
-  const body = box('div', null, 'body');
-  body.append(box('div', card.title, 'title'));
-  const fact = (label, name, url, suffix) => { // like the app's series and author lines: the name links to Goodreads
-    const line = box('div', null, 'meta');
-    line.append(`${label}: `);
-    if (url) { // urls come from our own service, checked in cleanAnswer, or built in background.js
-      const a = box('a', name);
-      a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
-      line.append(a);
-    } else line.append(name);
-    if (suffix) line.append(` #${suffix}`);
-    body.append(line);
-  };
-  if (card.series) fact(t.seriesLabel, card.series.name, card.seriesUrl, card.series.number);
-  if (card.author) fact(t.authorLabel, card.author.name, card.author.url);
-  const ratingBox = (r) => { // like the app: gold star, big number, small count (orange, with a warning popover, when thin)
-    const rating = box('div', null, 'rating');
-    rating.title = r.title;
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('aria-hidden', 'true');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z');
-    svg.append(path);
-    rating.append(svg, box('strong', r.value), box('span', `(${r.count})`, r.thin ? 'count thin' : 'count'));
-    if (r.thin) {
-      const warning = box('button', '⚠\uFE0E', 'warning');
-      warning.type = 'button';
-      warning.setAttribute('aria-label', `${t.thinLabel}: ${t.thin}`);
-      const popover = box('div', t.thin, 'popover');
-      popover.popover = 'auto';
-      warning.popoverTargetElement = popover;
-      popover.addEventListener('beforetoggle', (event) => {
-        if (event.newState !== 'open') return;
-        const at = warning.getBoundingClientRect();
-        popover.style.top = `${at.bottom + 6}px`;
-        popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 200 - 8))}px`;
-      });
-      rating.append(warning, popover);
+  const showCard = (card, back) => {
+    frame.replaceChildren();
+    frame.classList.remove('wait', 'none');
+    if (card.image) {
+      const img = document.createElement('img');
+      img.src = card.image; // already limited to https:// by cleanAnswer
+      img.alt = '';
+      img.className = 'cover';
+      frame.append(img);
     }
-    return rating;
+    const body = box('div', null, 'body');
+    body.append(box('div', card.title, 'title'));
+    const fact = (label, name, url, suffix) => {
+      // like the app's series and author lines: the name links to Goodreads
+      const line = box('div', null, 'meta');
+      line.append(`${label}: `);
+      if (url) {
+        // urls come from our own service, checked in cleanAnswer, or built in background.js
+        const a = box('a', name);
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        line.append(a);
+      } else line.append(name);
+      if (suffix) line.append(` #${suffix}`);
+      body.append(line);
+    };
+    if (card.series)
+      fact(t.seriesLabel, card.series.name, card.seriesUrl, card.series.number);
+    if (card.author) fact(t.authorLabel, card.author.name, card.author.url);
+    const ratingBox = (r) => {
+      // like the app: gold star, big number, small count (orange, with a warning popover, when thin)
+      const rating = box('div', null, 'rating');
+      rating.title = r.title;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'path',
+      );
+      path.setAttribute(
+        'd',
+        'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.5l-5.9 3.1 1.2-6.5L2.5 9.5l6.6-.9z',
+      );
+      svg.append(path);
+      const count = box('span', null, r.thin ? 'count thin' : 'count'); // the count and its warning are one block
+      count.append(box('span', `(${r.count})`));
+      rating.append(svg, box('strong', r.value), count);
+      if (r.thin) {
+        const warning = box('button', '⚠\uFE0E', 'warning');
+        warning.type = 'button';
+        warning.setAttribute('aria-label', `${t.thinLabel}: ${t.thin}`);
+        const popover = box('div', t.thin, 'popover');
+        popover.popover = 'auto';
+        warning.popoverTargetElement = popover;
+        popover.addEventListener('beforetoggle', (event) => {
+          if (event.newState !== 'open') return;
+          const at = warning.getBoundingClientRect();
+          popover.style.top = `${at.bottom + 6}px`;
+          popover.style.left = `${Math.max(8, Math.min(at.left, innerWidth - 180 - 8))}px`;
+        });
+        count.append(warning, popover);
+      }
+      return rating;
+    };
+    if (card.rating) body.append(ratingBox(card.rating));
+    const links = box('div', null, 'links');
+    for (const { name, url, title, icon } of card.links) {
+      const link = box('a');
+      const img = document.createElement('img');
+      img.src = icon; // our own copy of the site's icon (see icons/README.md)
+      img.alt = '';
+      link.append(img, name);
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.title = title;
+      links.append(link);
+    }
+    body.append(links);
+    if (debug) body.append(box('small', debug, 'meta'));
+    const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
+    siteButton = site;
+    showSite(t.enabled);
+    site.onclick = async () => {
+      const answer = await chrome.runtime
+        .sendMessage({ toggleSite: true })
+        .catch(() => null);
+      if (answer) showSite(answer.enabled);
+    };
+    body.append(site);
+    if (back) {
+      const list = box('button', t.back, 'site');
+      list.type = 'button';
+      list.onclick = back;
+      body.append(list);
+    }
+    frame.append(body, x);
   };
-  if (card.rating) body.append(ratingBox(card.rating));
-  const links = box('div', null, 'links');
-  for (const { name, url, title, icon } of card.links) {
-    const link = box('a');
-    const img = document.createElement('img');
-    img.src = icon; // our own copy of the site's icon (see icons/README.md)
-    img.alt = '';
-    link.append(img, name);
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.title = title;
-    links.append(link);
-  }
-  body.append(links);
-  if (debug) body.append(box('small', debug, 'meta'));
-  const site = box('button', t.enabled ? t.autoOff : t.autoOn, 'site');
-  siteButton = site;
-  site.onclick = async () => {
-    const answer = await chrome.runtime.sendMessage({ toggleSite: true }).catch(() => null);
-    if (answer) showSite(answer.enabled);
-  };
-  body.append(site);
   const x = box('button', '×', 'close');
   x.setAttribute('aria-label', t.close);
   x.onclick = close;
-  frame.append(body, x);
+  if (!picks) return showCard(card);
+  const showPicks = () => {
+    frame.replaceChildren();
+    const list = box('div', null, 'body');
+    list.append(box('div', t.pick, 'meta'));
+    for (const pick of picks) {
+      const item = box('button', null, 'pick');
+      item.type = 'button';
+      if (pick.image) {
+        const img = document.createElement('img');
+        img.src = pick.image;
+        img.alt = '';
+        img.className = 'thumb';
+        item.append(img);
+      }
+      const text = box('span', null, 'body');
+      text.append(
+        box('div', pick.title, 'title'),
+        box(
+          'div',
+          [pick.author?.name, pick.rating && `★ ${pick.rating.value}`]
+            .filter(Boolean)
+            .join(' · '),
+          'meta',
+        ),
+      );
+      item.append(text);
+      item.onclick = () => showCard(pick, showPicks);
+      list.append(item);
+    }
+    frame.append(list, x);
+  };
+  showPicks();
 })();

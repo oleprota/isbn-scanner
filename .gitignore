@@ -38,3 +38,6 @@ node_modules/
 .playwright-mcp/
 .wrangler/
 .dev.vars
+
+# Packaged extension
+dist/

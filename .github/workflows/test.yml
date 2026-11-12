@@ -12,7 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: Syntax check
-        run: for f in src/*.js worker/*.js; do node --check "$f"; done
-      - name: Tests
-        run: npm test
+      - run: npm ci
+      - name: Check
+        run: npm run check

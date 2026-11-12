@@ -55,7 +55,6 @@ export function splitTitle(name) {
 // The series the page itself names for this book: the link under its title, "The Chronicles of Saylok #1"
 // (it is in the page markup, not in the JSON-LD). `{ name, number, url }` with the series' own Goodreads page, or null.
 // shortcut: reads the first such link of the page (the book's own heading comes before any carousel), upgrade if Goodreads reorders it.
-const SERIES_URL = 'https://www.goodreads.com/series/';
 const SERIES_LINK = /<a href="(https:\/\/www\.goodreads\.com\/series\/[^"]{1,100})"[^>]*>([^<]{1,200})<!-- --> #(\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?)<\/a>/;
 export function pageSeries(html) {
   const match = SERIES_LINK.exec(html ?? '');

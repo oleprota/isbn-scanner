@@ -16,7 +16,12 @@ export function iconButton(icon, label) {
 
 // The star on a card or list row: marks or unmarks a book in the Marked list. It keeps one
 // name ("Mark") and exposes its state, instead of renaming itself.
-export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {} }) {
+export function createMarkToggle({
+  marked,
+  onChange,
+  onFull,
+  onToggle = () => {},
+}) {
   function sync(button) {
     const isMarked = marked.has(button.dataset.id);
     button.textContent = isMarked ? '★' : '☆';
@@ -33,7 +38,10 @@ export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {}
         if (marked.has(book.id)) {
           marked.remove(book.id);
           onToggle(false);
-        } else if (marked.add({ id: book.id, isbn: book.isbn, title: book.title })) onToggle(true);
+        } else if (
+          marked.add({ id: book.id, isbn: book.isbn, title: book.title })
+        )
+          onToggle(true);
         else onFull(); // the list is full
         onChange();
       });
@@ -41,7 +49,8 @@ export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {}
       return button;
     },
     syncAll() {
-      for (const button of document.querySelectorAll('.mark-toggle')) sync(button);
+      for (const button of document.querySelectorAll('.mark-toggle'))
+        sync(button);
     },
   };
 }
@@ -50,9 +59,13 @@ export function createMarkToggle({ marked, onChange, onFull, onToggle = () => {}
 function ratingTag(value, thin) {
   const tag = el('span', null, 'row-rating');
   const star = el('span', '★', 'row-star');
-  star.setAttribute('aria-hidden', 'true');
-  tag.append(star, el('span', `${card.ratingLabel}: `, 'sr-only'), value.toFixed(2));
   if (thin) tag.append(thinButton()); // the same button and popover as on the card
+  star.setAttribute('aria-hidden', 'true');
+  tag.append(
+    star,
+    el('span', `${card.ratingLabel}: `, 'sr-only'),
+    value.toFixed(2),
+  );
   return tag;
 }
 
@@ -69,9 +82,27 @@ function ratingTag(value, thin) {
 //   onCopy(ok): the Copy button was used (for the usage stats); notify(text, isError): status line; elements: { section, count, items, empty, copy, clear }
 // Edit mode (a toggle in the header, not remembered): each row gets a drag handle at the left edge (or ↑ ↓ on the
 // focused handle) and removeButton instead of rowButton. Moving a row saves the order and switches the list to the "custom" sort.
+// While the camera is on (setLocked) every control of the list is disabled and edit mode ends.
 // The section (a <details>) opens by itself when the list stops being empty (on load, or at the
 // first book added, also while scanning); after that the user's open/closed choice is left alone.
-export function createListView({ list, confirmClear, rowButton, removeButton = rowButton, onOpen, onChange, isWaiting = () => false, ratings = () => new Map(), thinRatings = () => new Set(), foundBy = () => new Map(), details = () => undefined, sortMode = 'date', onSort = () => {}, onCopy = () => {}, notify, elements }) {
+export function createListView({
+  list,
+  confirmClear,
+  rowButton,
+  removeButton = rowButton,
+  onOpen,
+  onChange,
+  isWaiting = () => false,
+  ratings = () => new Map(),
+  thinRatings = () => new Set(),
+  foundBy = () => new Map(),
+  details = () => undefined,
+  sortMode = 'date',
+  onSort = () => {},
+  onCopy = () => {},
+  notify,
+  elements,
+}) {
   const { section, count, items, empty, copy, clear } = elements;
   let locked = false;
   let wasEmpty = true;
@@ -79,7 +110,11 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
   let stale = false; // a closed section is not redrawn (up to 1000 rows per scan); it catches up when opened
 
   // the books in the order the user sees them
-  const ordered = (all, rated = ratings()) => sortBooks(all, sortMode, { ratingOf: (id) => rated.get(id) ?? 0, isWaiting });
+  const ordered = (all, rated = ratings()) =>
+    sortBooks(all, sortMode, {
+      ratingOf: (id) => rated.get(id) ?? 0,
+      isWaiting,
+    });
 
   function render() {
     const all = list.list();
@@ -89,40 +124,54 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
     empty.hidden = all.length > 0;
     copy.disabled = all.length === 0;
     clear.disabled = all.length === 0 || locked;
+    copy.disabled ||= locked;
     stale = !section.open;
     if (stale) return;
     const rated = ratings();
     const found = foundBy();
     const thin = thinRatings();
-    items.replaceChildren(...ordered(all, rated).map((book) => {
-      const item = el('li');
-      const open = el('button', book.title, 'open');
-      open.type = 'button';
-      open.disabled = locked;
-      open.title = book.title; // the full name, for a name the row has to cut
-      open.addEventListener('click', () => onOpen(book));
-      const actions = el('span', null, 'row-actions');
-      actions.append(
-        ...isbnLinks(book.isbn, found.get(book.id)).map((link) => linkButton(link)),
-        editing ? removeButton(book) : rowButton(book),
-      );
-      item.dataset.id = book.id;
-      if (editing) item.append(dragHandle(item));
-      item.append(open);
-      // the spinner and the rating share one place; the rating (the star and the value only) comes once the lookup is over
-      if (isWaiting(book.id)) item.append(spinner(search.lookingUp));
-      else if (rated.has(book.id)) item.append(ratingTag(rated.get(book.id), thin.has(book.id)));
-      item.append(actions);
-      return item;
-    }));
+    items.replaceChildren(
+      ...ordered(all, rated).map((book) => {
+        const item = el('li');
+        const open = el('button', book.title, 'open');
+        open.type = 'button';
+        open.disabled = locked;
+        open.title = book.title; // the full name, for a name the row has to cut
+        open.addEventListener('click', () => onOpen(book));
+        const actions = el('span', null, 'row-actions');
+        actions.append(
+          ...isbnLinks(book.isbn, found.get(book.id)).map((link) =>
+            linkButton(link),
+          ),
+          editing ? removeButton(book) : rowButton(book),
+        );
+        item.dataset.id = book.id;
+        if (editing) item.append(dragHandle(item));
+        item.append(open);
+        // the spinner and the rating share one place; the rating (the star and the value only) comes once the lookup is over
+        if (isWaiting(book.id)) item.append(spinner(search.lookingUp));
+        else if (rated.has(book.id))
+          item.append(ratingTag(rated.get(book.id), thin.has(book.id)));
+        item.append(actions);
+        return item;
+      }),
+    );
+    setRowsLocked();
   }
+
+  const setRowsLocked = () => {
+    for (const control of items.querySelectorAll('.open, .row-actions button'))
+      control.disabled = locked;
+  };
 
   // The handle at the left of a row in edit mode.
   function dragHandle(item) {
     const handle = iconButton('⠿', lists.dragHandle);
     handle.classList.add('drag-handle');
+    let before;
     // Moving the row in the DOM drops pointer capture, so the drag listens on the document.
     function move(event) {
+      if (!item.isConnected) return; // the list was redrawn under the drag
       const others = [...items.children].filter((other) => other !== item);
       const next = others.find((other) => {
         const box = other.getBoundingClientRect();
@@ -136,12 +185,14 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
       document.removeEventListener('pointerup', drop);
       document.removeEventListener('pointercancel', drop);
       item.classList.remove('dragging');
-      commitOrder();
+      if (!item.isConnected) return;
+      if (rowIds().join() !== before) commitOrder(); // a tap without a move changes nothing
       handle.focus();
     }
     handle.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 && event.pointerType === 'mouse') return;
       event.preventDefault();
+      before = rowIds().join();
       item.classList.add('dragging');
       document.addEventListener('pointermove', move);
       document.addEventListener('pointerup', drop);
@@ -150,7 +201,10 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
     handle.addEventListener('keydown', (event) => {
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       event.preventDefault();
-      const to = event.key === 'ArrowUp' ? item.previousElementSibling : item.nextElementSibling;
+      const to =
+        event.key === 'ArrowUp'
+          ? item.previousElementSibling
+          : item.nextElementSibling;
       if (!to) return;
       if (event.key === 'ArrowUp') to.before(item);
       else to.after(item);
@@ -160,13 +214,16 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
     return handle;
   }
 
+  const rowIds = () => [...items.children].map((item) => item.dataset.id);
+
   // Saves the rows as they are on screen as the list's own order, and switches to it. The rows stay (no redraw), so a drag is not interrupted.
   function commitOrder() {
-    list.reorder([...items.children].map((item) => item.dataset.id));
+    list.reorder(rowIds());
     if (sortMode !== 'custom') {
       sortMode = 'custom';
       onSort('custom');
-      for (const [mode, choice] of choices) choice.setAttribute('aria-pressed', String(mode === sortMode));
+      for (const [mode, choice] of choices)
+        choice.setAttribute('aria-pressed', String(mode === sortMode));
     }
   }
 
@@ -192,7 +249,8 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
   function setMenu(open) {
     menu.hidden = !open;
     sortButton.setAttribute('aria-expanded', String(open));
-    for (const [mode, choice] of choices) choice.setAttribute('aria-pressed', String(mode === sortMode));
+    for (const [mode, choice] of choices)
+      choice.setAttribute('aria-pressed', String(mode === sortMode));
   }
   sortButton.addEventListener('click', (event) => {
     event.preventDefault();
@@ -201,18 +259,26 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
   const editButton = iconButton('✎', lists.edit);
   editButton.classList.add('edit-button');
   editButton.setAttribute('aria-pressed', 'false');
-  editButton.addEventListener('click', (event) => {
-    event.preventDefault();
-    editing = !editing;
+  function setEditing(value) {
+    editing = value;
     editButton.setAttribute('aria-pressed', String(editing));
     editButton.title = editButton.ariaLabel = editing ? lists.editDone : lists.edit;
     section.classList.toggle('editing', editing);
     render();
+  }
+  editButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!locked) setEditing(!editing);
   });
   menu.append(...choices.map(([, choice]) => choice));
   header.append(editButton, sortButton, menu);
   document.addEventListener('pointerdown', (event) => {
-    if (!menu.hidden && !menu.contains(event.target) && !sortButton.contains(event.target)) setMenu(false);
+    if (
+      !menu.hidden &&
+      !menu.contains(event.target) &&
+      !sortButton.contains(event.target)
+    )
+      setMenu(false);
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !menu.hidden) {
@@ -226,19 +292,32 @@ export function createListView({ list, confirmClear, rowButton, removeButton = r
     if (section.open && stale) render();
   });
 
-  // While the camera is on, opening a book (a search) and Clear are locked.
+  // While the camera is on, nothing in the list can be used: edit, sort, Copy, Clear, the rows' buttons. Edit mode ends.
   function setLocked(value) {
     locked = value;
+    editButton.disabled = sortButton.disabled = value;
+    if (value) setMenu(false);
+    if (value && editing) {
+      setEditing(false); // redraws
+      return;
+    }
     clear.disabled = value || list.list().length === 0;
-    for (const open of items.querySelectorAll('.open')) open.disabled = value;
+    copy.disabled = value || list.list().length === 0;
+    setRowsLocked();
   }
 
   copy.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(copyText(ordered(list.list()), (book) => {
-        const found = details(book.id);
-        return { author: found?.author?.name, rating: found?.rating, found: foundBy().get(book.id) };
-      }));
+      await navigator.clipboard.writeText(
+        copyText(ordered(list.list()), (book) => {
+          const found = details(book.id);
+          return {
+            author: found?.author?.name,
+            rating: found?.rating,
+            found: foundBy().get(book.id),
+          };
+        }),
+      );
       notify(lists.copied(books(list.list().length)));
       onCopy(true);
     } catch {

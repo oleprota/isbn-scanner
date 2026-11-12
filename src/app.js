@@ -13,7 +13,9 @@ import { NAME_MAX, createBookTitles, keepKnown } from './bookTitles.js';
 import { cleanText } from './text.js';
 import { loadSort, saveSort } from './sort.js';
 import { coverImage, factsBlock, isbnRows, ratingBlock } from './details.js';
-import { LOOKUP_URL, bookPageUrl, editionOfBook, lookupBook, searchBooks, setNoCache } from './lookup.js';
+import { LOOKUP_URL, bookPageUrl, editionOfBook, getThinCount, lookupBook, searchBooks, setNoCache, setThinCount } from './lookup.js';
+import { loadThin, saveThin } from './settings.js';
+import { mountSettings } from './settingsView.js';
 import { createListView, createMarkToggle, iconButton } from './listView.js';
 import { el, linkButton, spinner } from './dom.js';
 import { applyTheme, loadTheme, nextTheme, saveTheme } from './theme.js';
@@ -21,6 +23,8 @@ import * as str from './strings.js';
 
 str.applyStrings(document);
 if (['localhost', '127.0.0.1'].includes(location.hostname)) document.title += str.page.localSuffix; // the local copy is told apart on the tab
+
+setThinCount(loadThin(browserStorage())); // before anything is drawn
 
 const form = document.getElementById('search');
 const input = document.getElementById('isbn');
@@ -182,7 +186,6 @@ input.addEventListener('input', () => {
   clearWarning();
 });
 
-
 // The title on a card is also where the book is named: tap it to type a name (Enter or leaving
 // the field saves, Escape cancels); an empty name goes back to `ISBN <number>`. The name is saved
 // per book and also updates the Scanned and Marked entries for that book.
@@ -195,16 +198,13 @@ function titleHeading(book, waiting) {
   heading.append(slot);
   const setWaiting = (on) => (on ? heading.append(ring) : ring.remove());
 
-  // `refocus`: the editor was closed from the keyboard, so keep the focus on the title
-  // (otherwise it would fall back to the top of the page).
-  function showTitle(refocus = false) {
+  function showTitle() {
     const title = el('button', book.title, 'title-edit');
     title.type = 'button';
     title.title = str.card.editName;
     title.addEventListener('click', startEditing);
     slot.classList.remove('editing');
     slot.replaceChildren(title);
-    if (refocus) title.focus();
   }
 
   function save(raw, initial) {
@@ -226,20 +226,20 @@ function titleHeading(book, waiting) {
     field.placeholder = titles.fallback(book.id); // what an empty name turns back into
     field.setAttribute('aria-label', str.card.nameLabel);
     let finished = false;
-    const finish = (keep, refocus) => {
+    const finish = (keep) => {
       if (finished) return; // Enter and the blur that follows it must not save twice
       finished = true;
       if (keep) save(field.value, initial);
-      showTitle(refocus);
+      showTitle();
     };
     field.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault(); // else the Enter is also delivered to the title button that takes the field's place, and reopens the editor
-        finish(true, true);
+        finish(true);
       }
-      if (event.key === 'Escape') finish(false, true);
+      if (event.key === 'Escape') finish(false);
     });
-    field.addEventListener('blur', () => finish(true, false));
+    field.addEventListener('blur', () => finish(true));
     slot.classList.add('editing');
     slot.replaceChildren(field);
     field.focus();
@@ -769,6 +769,18 @@ window.addEventListener('popstate', () => {
     result.replaceChildren();
     setStatus('');
   }
+});
+
+// A new threshold redraws what depends on it: the stars' warnings in both lists and on the card.
+mountSettings({
+  body: document.getElementById('settings-body'),
+  get: getThinCount,
+  commit: (count) => {
+    setThinCount(count);
+    saveThin(browserStorage(), count);
+    renderLists();
+    if (shown) shown.setDetails(titles.details(shown.book.id));
+  },
 });
 
 let theme = loadTheme(browserStorage());

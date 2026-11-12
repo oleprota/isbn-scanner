@@ -43,7 +43,10 @@ export function cleanAnswer(data) {
 
 // A rating count under this is too small to trust (the Card shows it orange, with a warning). The page and the extension share it.
 export const THIN_RATING_COUNT = 100;
-export const isThin = (rating) => Boolean(rating) && rating.count < THIN_RATING_COUNT;
+let thinCount = THIN_RATING_COUNT; // the user's setting (src/settings.js) replaces it at start-up and on change
+export const getThinCount = () => thinCount;
+export const setThinCount = (count) => { thinCount = count; };
+export const isThin = (rating) => Boolean(rating) && rating.count < thinCount;
 
 function cleanRating(rating) {
   const value = Number(rating?.value);

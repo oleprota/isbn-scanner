@@ -2,6 +2,7 @@
 // background.js watches both and re-registers the auto-start script.
 import { options as t } from './texts.js';
 import { DEV_MS, readDev } from './devMode.js';
+import { THIN_RATING_COUNT } from './shared/lookup.js';
 import { hostPatterns, sitesFromOrigins } from './sites.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +14,12 @@ $('empty').textContent = t.empty;
 const master = $('master');
 chrome.storage.sync.get({ autoMode: true }).then(({ autoMode }) => { master.checked = autoMode; });
 master.onchange = () => chrome.storage.sync.set({ autoMode: master.checked });
+
+$('thinText').textContent = t.thin;
+$('thinHelp').textContent = t.thinHelp;
+const thin = $('thin');
+chrome.storage.sync.get({ thinCount: THIN_RATING_COUNT }).then(({ thinCount }) => { thin.value = thinCount; });
+thin.onchange = () => { if (thin.validity.valid && thin.value) chrome.storage.sync.set({ thinCount: Math.round(thin.value) }); };
 
 $('developerText').textContent = t.developer;
 $('devCacheText').textContent = t.devCache;
